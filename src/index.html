@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http://localhost:3000;">
+    <title>企业专利全生命周期管理系统</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- 作用：应用密码锁页面 -->
+    <!-- 数据来源：用户输入 -->
+    <div id="loginPage" class="page">
+        <div class="login-container">
+            <h1>🔒 企业专利管理系统</h1>
+            <p class="login-subtitle">请输入应用密码</p>
+            <!-- 作用：密码输入框 -->
+            <input type="password" id="passwordInput" placeholder="请输入密码" autofocus>
+            <!-- 作用：登录按钮 -->
+            <button id="loginBtn" class="btn-primary">解锁</button>
+            <!-- 作用：错误提示 -->
+            <p id="loginError" class="error-msg hidden">密码错误，请重试</p>
+        </div>
+    </div>
+
+    <!-- 作用：首次使用密码设置页面 -->
+    <div id="setupPage" class="page hidden">
+        <div class="login-container">
+            <h1>🔒 首次使用</h1>
+            <p class="login-subtitle">请设置应用密码</p>
+            <input type="password" id="setupPasswordInput" placeholder="请输入密码">
+            <input type="password" id="setupConfirmInput" placeholder="请确认密码">
+            <button id="setupBtn" class="btn-primary">确认设置</button>
+            <p id="setupError" class="error-msg hidden">密码不匹配或为空</p>
+        </div>
+    </div>
+
+    <!-- 作用：应用主界面（登录后显示） -->
+    <div id="appPage" class="page hidden">
+        <!-- 作用：顶部导航栏 -->
+        <header class="top-nav">
+            <div class="nav-title">企业专利全生命周期管理系统</div>
+            <!-- 作用：导航标签 -->
+            <nav class="nav-tabs">
+                <button class="nav-tab active" data-page="dashboard">📊 仪表盘</button>
+                <button class="nav-tab" data-page="workbench">🔧 工作台</button>
+                <button class="nav-tab" data-page="datahub">📂 数据中心</button>
+            </nav>
+        </header>
+
+        <!-- 作用：仪表盘页面 -->
+        <div id="dashboardPage" class="page-content active">
+            <div class="placeholder">
+                <h2>仪表盘</h2>
+                <p>数据可视化分析（待开发）</p>
+            </div>
+        </div>
+
+        <!-- 作用：工作台页面 -->
+        <div id="workbenchPage" class="page-content">
+            <div class="placeholder">
+                <h2>工作台</h2>
+                <p>专利管理与操作（待开发）</p>
+            </div>
+        </div>
+
+        <!-- 作用：数据中心页面 -->
+        <div id="datahubPage" class="page-content">
+            <div class="placeholder">
+                <h2>数据中心</h2>
+                <p>数据录入与导出（待开发）</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/login.js"></script>
+</body>
+</html>
