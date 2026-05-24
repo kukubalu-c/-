@@ -10,6 +10,7 @@ const initSqlJs = require('sql.js');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const seedData = require('./seed_data.js');
 
 class Database {
     /**
@@ -152,7 +153,67 @@ class Database {
             )
         `);
 
+        // === 年费标准表：存储各类型专利各年度的年费金额 ===
+        this.db.run(`
+            CREATE TABLE IF NOT EXISTS fee_standards (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                patent_type     TEXT NOT NULL,              -- 专利类型：发明/实用新型/外观设计
+                year_start      INTEGER NOT NULL,           -- 起始年度
+                year_end        INTEGER NOT NULL,           -- 结束年度
+                fee             REAL NOT NULL               -- 年费金额（元）
+            )
+        `);
+
+        // === 费减比例表 ===
+        this.db.run(`
+            CREATE TABLE IF NOT EXISTS fee_reduction_rates (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                type            TEXT NOT NULL UNIQUE,       -- 类型：无/个人/小微企业/普通企业/事业高校
+                rate            REAL NOT NULL               -- 费减后应缴比例（如0.15=缴15%）
+            )
+        `);
+
+        // === 滞纳金比例表 ===
+        this.db.run(`
+            CREATE TABLE IF NOT EXISTS penalty_rates (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                overdue_months  INTEGER NOT NULL,           -- 逾期月数
+                rate            REAL NOT NULL               -- 滞纳金比例（如0.05=加收5%）
+            )
+        `);
+
+        // === 状态流转映射表：定义专利状态变更规则 ===
+        this.db.run(`
+            CREATE TABLE IF NOT EXISTS status_transitions (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                current_status      TEXT NOT NULL,           -- 当前状态
+                action              TEXT NOT NULL,           -- 用户操作
+                attachment_required INTEGER DEFAULT 0,      -- 是否需要上传附件 0/1
+                attachment_type     TEXT DEFAULT '',         -- 附件类型说明
+                next_status         TEXT NOT NULL,           -- 下一状态
+                fee_type            TEXT DEFAULT '',         -- 涉及费用类型
+                fee_due_rule        TEXT DEFAULT ''          -- 费用截止规则
+            )
+        `);
+
+        // === 费用截止规则表 ===
+        this.db.run(`
+            CREATE TABLE IF NOT EXISTS fee_due_rules (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                fee_type        TEXT NOT NULL,               -- 费用类型
+                base_on         TEXT NOT NULL,               -- 基准日期字段名
+                offset_months   INTEGER NOT NULL,            -- 偏移月数
+                desc            TEXT DEFAULT ''              -- 规则描述
+            )
+        `);
+
         this.save();
+
+        // 第5步：检查是否需要填充种子数据
+        const seeded = this.query("SELECT value FROM settings WHERE key = 'seed_imported'");
+        if (seeded.length === 0) {
+            this.seedData();
+        }
     }
 
     /**
@@ -246,6 +307,73 @@ class Database {
         } catch (e) {
             // 日志写入失败不影响主操作
         }
+    }
+
+    /**
+     * 函数名：seedData
+     * 作用：首次初始化时填充种子数据（年费标准、费减比例、状态流转等）
+     * 参数：无
+     * 返回值：void
+     * 使用场景：数据库首次创建时自动调用
+     */
+    seedData() {
+        // 第1步：填充年费标准
+        const insertFee = this.db.prepare(
+            "INSERT INTO fee_standards (patent_type, year_start, year_end, fee) VALUES (?, ?, ?, ?)"
+        );
+        seedData.FEE_STANDARDS.forEach(s => {
+            insertFee.run([s.patent_type, s.year_start, s.year_end, s.fee]);
+        });
+        insertFee.free();
+
+        // 第2步：填充费减比例
+        const insertReduction = this.db.prepare(
+            "INSERT INTO fee_reduction_rates (type, rate) VALUES (?, ?)"
+        );
+        seedData.FEE_REDUCTION_RATES.forEach(r => {
+            insertReduction.run([r.type, r.rate]);
+        });
+        insertReduction.free();
+
+        // 第3步：填充滞纳金比例
+        const insertPenalty = this.db.prepare(
+            "INSERT INTO penalty_rates (overdue_months, rate) VALUES (?, ?)"
+        );
+        seedData.PENALTY_RATES.forEach(p => {
+            insertPenalty.run([p.overdue_months, p.rate]);
+        });
+        insertPenalty.free();
+
+        // 第4步：填充状态流转映射
+        const insertTransition = this.db.prepare(
+            `INSERT INTO status_transitions
+             (current_status, action, attachment_required, attachment_type, next_status, fee_type, fee_due_rule)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`
+        );
+        seedData.STATUS_TRANSITIONS.forEach(t => {
+            insertTransition.run([
+                t.current_status, t.action, t.attachment_required,
+                t.attachment_type, t.next_status, t.fee_type, t.fee_due_rule
+            ]);
+        });
+        insertTransition.free();
+
+        // 第5步：填充费用截止规则
+        const insertDueRule = this.db.prepare(
+            "INSERT INTO fee_due_rules (fee_type, base_on, offset_months, desc) VALUES (?, ?, ?, ?)"
+        );
+        seedData.FEE_DUE_RULES.forEach(r => {
+            insertDueRule.run([r.fee_type, r.base_on, r.offset_months, r.desc]);
+        });
+        insertDueRule.free();
+
+        // 第6步：标记种子数据已导入
+        this.db.run(
+            "INSERT INTO settings (key, value) VALUES ('seed_imported', '1')"
+        );
+
+        this.save();
+        console.log('种子数据已导入');
     }
 
     /**
