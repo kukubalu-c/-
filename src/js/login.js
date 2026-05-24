@@ -126,8 +126,8 @@ document.getElementById('setupConfirmInput').addEventListener('keydown', (e) => 
 // 导航切换逻辑
 // ============================================
 function initNavigation() {
-    // 第1步：获取所有导航按钮
-    const navTabs = document.querySelectorAll('.nav-tab');
+    // 第1步：获取侧边栏导航按钮
+    const navItems = document.querySelectorAll('.nav-item');
     // 第2步：获取所有页面内容区
     const pages = {
         dashboard: document.getElementById('dashboardPage'),
@@ -136,14 +136,14 @@ function initNavigation() {
     };
 
     // 第3步：为每个导航按钮绑定点击事件
-    navTabs.forEach(tab => {
-        tab.addEventListener('click', () => {
+    navItems.forEach(item => {
+        item.addEventListener('click', () => {
             // 3.1 更新导航高亮状态
-            navTabs.forEach(t => t.classList.remove('active'));
-            tab.classList.add('active');
+            navItems.forEach(n => n.classList.remove('active'));
+            item.classList.add('active');
 
             // 3.2 切换页面内容区
-            const pageName = tab.dataset.page;
+            const pageName = item.dataset.page;
             Object.keys(pages).forEach(key => {
                 pages[key].classList.toggle('active', key === pageName);
             });
