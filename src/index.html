@@ -96,20 +96,163 @@
                 </div>
 
                 <div id="datahubPage" class="page-content">
-                    <div class="placeholder">
-                        <div class="placeholder-icon">
-                            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                    <!-- 作用：数据中心子标签导航 -->
+                    <div class="sub-tabs">
+                        <button class="sub-tab active" data-subpage="manual">手动录入</button>
+                        <button class="sub-tab" data-subpage="import">Excel导入</button>
+                        <button class="sub-tab" data-subpage="export">导出</button>
+                        <button class="sub-tab" data-subpage="recycle">回收站</button>
+                    </div>
+
+                    <!-- ====== 手动录入 ====== -->
+                    <div id="subManual" class="sub-page active">
+                        <div class="card">
+                            <div class="card-header">
+                                <span class="card-title">新增专利</span>
+                            </div>
+                            <div class="card-body">
+                                <form id="patentForm">
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>专利号/申请号 <span class="required">*</span></label>
+                                            <input type="text" id="fPatentNo" placeholder="如 202310123456.7">
+                                            <span class="field-hint">13位数字 + 小数点 + 1位校验位</span>
+                                            <span id="fPatentNoError" class="field-error hidden"></span>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>专利名称 <span class="required">*</span></label>
+                                            <input type="text" id="fPatentName" placeholder="请输入专利名称">
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>专利类型 <span class="required">*</span></label>
+                                            <select id="fPatentType">
+                                                <option value="">请选择</option>
+                                                <option value="发明">发明</option>
+                                                <option value="实用新型">实用新型</option>
+                                                <option value="外观设计">外观设计</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>权利状态</label>
+                                            <select id="fStatus">
+                                                <option value="撰写中">撰写中</option>
+                                                <option value="已申请">已申请</option>
+                                                <option value="已受理">已受理</option>
+                                                <option value="形式审查中">形式审查中</option>
+                                                <option value="实质审查中">实质审查中</option>
+                                                <option value="OA答复中">OA答复中</option>
+                                                <option value="通知授权">通知授权</option>
+                                                <option value="专利权生效">专利权生效</option>
+                                                <option value="已驳回">已驳回</option>
+                                                <option value="已撤回">已撤回</option>
+                                                <option value="已终止">已终止</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>发明人</label>
+                                            <input type="text" id="fInventor" placeholder="多个发明人用逗号分隔">
+                                        </div>
+                                        <div class="form-group">
+                                            <label>申请人</label>
+                                            <input type="text" id="fApplicant" placeholder="申请人名称">
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>申请日期</label>
+                                            <input type="date" id="fApplyDate">
+                                        </div>
+                                        <div class="form-group">
+                                            <label>授权公告日</label>
+                                            <input type="date" id="fAuthorizeDate">
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>费减比例</label>
+                                            <select id="fFeeReduction">
+                                                <option value="无">无（全额）</option>
+                                                <option value="个人">个人（85%费减）</option>
+                                                <option value="小微企业">小微企业（85%费减）</option>
+                                                <option value="普通企业">普通企业（70%费减）</option>
+                                                <option value="事业高校">事业高校（100%费减）</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>备注</label>
+                                            <input type="text" id="fNotes" placeholder="可选备注信息">
+                                        </div>
+                                    </div>
+                                    <div class="form-actions">
+                                        <span id="fFormMessage" class="form-msg hidden"></span>
+                                        <button type="button" class="btn btn-primary" id="btnSavePatent">保存</button>
+                                        <button type="button" class="btn btn-default" id="btnResetForm">重置</button>
+                                    </div>
+                                </form>
+                            </div>
                         </div>
-                        <h3>数据中心</h3>
-                        <p>专利数据导入与导出</p>
-                        <span class="placeholder-badge">待开发</span>
+                    </div>
+
+                    <!-- ====== Excel导入 ====== -->
+                    <div id="subImport" class="sub-page">
+                        <div class="card">
+                            <div class="card-header">
+                                <span class="card-title">Excel 批量导入</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="import-actions">
+                                    <button class="btn btn-default" id="btnDownloadTemplate">下载导入模板</button>
+                                    <div class="import-upload-area" id="uploadArea">
+                                        <p>点击选择 .xlsx 文件</p>
+                                        <p class="upload-hint">支持 .xlsx 格式，表头自动匹配</p>
+                                        <input type="file" id="fileInput" accept=".xlsx" class="hidden">
+                                    </div>
+                                </div>
+                                <!-- 作用：导入预览表格 -->
+                                <div id="importPreview" class="hidden">
+                                    <h4>导入预览</h4>
+                                    <div id="importTableWrapper"></div>
+                                    <div id="importErrors" class="import-errors"></div>
+                                    <div class="form-actions">
+                                        <button class="btn btn-primary" id="btnConfirmImport">确认导入</button>
+                                        <button class="btn btn-default" id="btnCancelImport">取消</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ====== 导出（占位） ====== -->
+                    <div id="subExport" class="sub-page">
+                        <div class="card">
+                            <div class="card-header"><span class="card-title">数据导出</span></div>
+                            <div class="card-body placeholder-mini">
+                                <p>导出功能待开发</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ====== 回收站（占位） ====== -->
+                    <div id="subRecycle" class="sub-page">
+                        <div class="card">
+                            <div class="card-header"><span class="card-title">回收站</span></div>
+                            <div class="card-body placeholder-mini">
+                                <p>回收站功能待开发</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </main>
         </div>
     </div>
 
+    <script src="/node_modules/xlsx/dist/xlsx.full.min.js"></script>
     <script src="js/api.js"></script>
     <script src="js/login.js"></script>
+    <script src="js/datahub.js"></script>
 </body>
 </html>

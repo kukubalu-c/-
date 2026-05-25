@@ -20,6 +20,7 @@ const PORT = 3000;
 const ROOT_DIR = __dirname;
 const SRC_DIR = path.join(ROOT_DIR, 'src');
 const DATA_DIR = path.join(ROOT_DIR, 'data');
+const NM_DIR = path.join(ROOT_DIR, 'node_modules');
 
 // ============================================
 // 初始化数据库
@@ -212,12 +213,14 @@ function startHttpServer() {
         let filePath;
         if (pathname === '/') {
             filePath = path.join(SRC_DIR, 'index.html');
+        } else if (pathname.startsWith('/node_modules/')) {
+            filePath = path.join(ROOT_DIR, pathname);
         } else {
             filePath = path.join(SRC_DIR, pathname);
         }
 
         // 安全检查：防止目录穿越
-        if (!filePath.startsWith(SRC_DIR) && !filePath.startsWith(DATA_DIR)) {
+        if (!filePath.startsWith(SRC_DIR) && !filePath.startsWith(DATA_DIR) && !filePath.startsWith(NM_DIR)) {
             res.writeHead(403);
             res.end('Forbidden');
             return;
