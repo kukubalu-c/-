@@ -283,6 +283,7 @@ body {
 .btn-primary:hover { background: #40a9ff; color: #fff; border-color: #40a9ff; }
 .btn-default { background: #fff; color: #333; }
 .btn-default:hover { border-color: #1890ff; color: #1890ff; }
+.btn-sm { height: 30px; padding: 0 12px; font-size: 13px; }
 
 /* ============================================ */
 /* 子标签导航（数据中心内嵌标签） */
@@ -498,6 +499,29 @@ body {
     min-height: 200px;
     color: #bbb;
     font-size: 14px;
+}
+
+/* ============================================ */
+/* 导出复选框网格 */
+/* ============================================ */
+.checkbox-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+}
+.checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    color: #333;
+    cursor: pointer;
+    min-width: 120px;
+}
+.checkbox-item input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
 }
 
 /* ============================================ */

@@ -38,7 +38,10 @@ function validatePatentNo(value) {
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
     initSubTabs();
+    initExport();
     initImport();
+    initRecycle();
+    cleanupRecycleBin();
 });
 
 // ============================================
@@ -58,6 +61,125 @@ function initSubTabs() {
     });
 }
 
+
+// ============================================
+// 导出功能
+// ============================================
+function initExport() {
+    document.getElementById('btnExport').addEventListener('click', exportToExcel);
+}
+
+/**
+ * 函数名：exportToExcel
+ * 作用：按选中字段导出专利数据到 Excel
+ * 参数：无
+ * 返回值：Promise<void>
+ * 使用场景：用户点击"导出 Excel"按钮时
+ */
+async function exportToExcel() {
+    // 第1步：获取选中的字段
+    const checked = document.querySelectorAll('.export-field:checked');
+    if (checked.length === 0) {
+        alert('请至少选择一个导出字段');
+        return;
+    }
+
+    const fields = Array.from(checked).map(cb => cb.value);
+    // 中文表头映射
+    const fieldLabels = {
+        patent_no: '专利号/申请号', patent_name: '专利名称', patent_type: '专利类型',
+        inventor: '发明人', applicant: '申请人', apply_date: '申请日期',
+        authorize_date: '授权公告日', status: '权利状态', fee_reduction: '费减比例', notes: '备注'
+    };
+
+    // 第2步：查询所有未删除的专利
+    const patents = await window.patentAPI.dbQuery(
+        "SELECT * FROM patents WHERE is_deleted = 0 ORDER BY created_at DESC"
+    );
+
+    if (patents.length === 0) {
+        alert('没有可导出的数据');
+        return;
+    }
+
+    // 第3步：生成导出数据
+    const headers = fields.map(f => fieldLabels[f] || f);
+    const rows = patents.map(p => fields.map(f => p[f] || ''));
+    const wsData = [headers, ...rows];
+
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    ws['!cols'] = fields.map(() => ({ wch: 20 }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '专利数据');
+    XLSX.writeFile(wb, `专利导出_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+// ============================================
+// 回收站功能
+// ============================================
+function initRecycle() {
+    loadRecycleBin();
+}
+
+/**
+ * 函数名：loadRecycleBin
+ * 作用：加载回收站中的专利列表
+ * 参数：无
+ * 返回值：Promise<void>
+ * 使用场景：进入回收站标签时
+ */
+async function loadRecycleBin() {
+    const patents = await window.patentAPI.dbQuery(
+        "SELECT id, patent_no, patent_name, patent_type, deleted_at FROM patents WHERE is_deleted = 1 ORDER BY deleted_at DESC"
+    );
+
+    const tbody = document.getElementById('recycleBody');
+    if (patents.length === 0) {
+        tbody.innerHTML = '<tr id="recycleEmpty"><td colspan="5" class="text-center text-muted">回收站为空</td></tr>';
+        return;
+    }
+
+    let html = '';
+    patents.forEach(p => {
+        html += `<tr>
+            <td>${p.patent_no}</td>
+            <td>${p.patent_name}</td>
+            <td>${p.patent_type}</td>
+            <td>${p.deleted_at || '-'}</td>
+            <td><button class="btn btn-default btn-sm" onclick="restorePatent(${p.id})">恢复</button></td>
+        </tr>`;
+    });
+    tbody.innerHTML = html;
+}
+
+/**
+ * 函数名：restorePatent
+ * 作用：从回收站恢复专利
+ * 参数：
+ *   - id - number - 专利ID
+ * 返回值：Promise<void>
+ * 使用场景：用户点击"恢复"按钮时
+ */
+async function restorePatent(id) {
+    await window.patentAPI.dbRun(
+        "UPDATE patents SET is_deleted = 0, deleted_at = NULL, updated_at = datetime('now','localtime') WHERE id = ?",
+        [id]
+    );
+    loadRecycleBin();
+}
+
+/**
+ * 函数名：cleanupRecycleBin
+ * 作用：清理超过30天的回收站记录（彻底删除）
+ * 参数：无
+ * 返回值：Promise<void>
+ * 使用场景：应用启动时或每日首次打开回收站时
+ */
+async function cleanupRecycleBin() {
+    await window.patentAPI.dbRun(
+        "DELETE FROM patents WHERE is_deleted = 1 AND deleted_at IS NOT NULL AND datetime(deleted_at) < datetime('now','-30 days','localtime')"
+    );
+}
 
 // ============================================
 // Excel 导入功能
@@ -302,6 +424,9 @@ async function confirmImport() {
         alert('没有需要导入的数据');
         return;
     }
+
+    // 备份数据库
+    await window.patentAPI.backupDatabase();
 
     // 执行导入
     let successCount = 0;

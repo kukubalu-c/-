@@ -227,22 +227,48 @@
                         </div>
                     </div>
 
-                    <!-- ====== 导出（占位） ====== -->
+                    <!-- ====== 导出 ====== -->
                     <div id="subExport" class="sub-page">
                         <div class="card">
                             <div class="card-header"><span class="card-title">数据导出</span></div>
-                            <div class="card-body placeholder-mini">
-                                <p>导出功能待开发</p>
+                            <div class="card-body">
+                                <div class="export-fields">
+                                    <p class="text-muted mb-16">选择要导出的字段：</p>
+                                    <div class="checkbox-grid">
+                                        <label class="checkbox-item"><input type="checkbox" class="export-field" value="patent_no" checked> 专利号</label>
+                                        <label class="checkbox-item"><input type="checkbox" class="export-field" value="patent_name" checked> 专利名称</label>
+                                        <label class="checkbox-item"><input type="checkbox" class="export-field" value="patent_type" checked> 专利类型</label>
+                                        <label class="checkbox-item"><input type="checkbox" class="export-field" value="inventor" checked> 发明人</label>
+                                        <label class="checkbox-item"><input type="checkbox" class="export-field" value="applicant" checked> 申请人</label>
+                                        <label class="checkbox-item"><input type="checkbox" class="export-field" value="apply_date" checked> 申请日期</label>
+                                        <label class="checkbox-item"><input type="checkbox" class="export-field" value="authorize_date"> 授权公告日</label>
+                                        <label class="checkbox-item"><input type="checkbox" class="export-field" value="status" checked> 权利状态</label>
+                                        <label class="checkbox-item"><input type="checkbox" class="export-field" value="fee_reduction"> 费减比例</label>
+                                        <label class="checkbox-item"><input type="checkbox" class="export-field" value="notes"> 备注</label>
+                                    </div>
+                                </div>
+                                <div class="form-actions">
+                                    <button class="btn btn-primary" id="btnExport">导出 Excel</button>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- ====== 回收站（占位） ====== -->
+                    <!-- ====== 回收站 ====== -->
                     <div id="subRecycle" class="sub-page">
                         <div class="card">
                             <div class="card-header"><span class="card-title">回收站</span></div>
-                            <div class="card-body placeholder-mini">
-                                <p>回收站功能待开发</p>
+                            <div class="card-body">
+                                <div id="recycleList">
+                                    <table class="import-table">
+                                        <thead><tr>
+                                            <th>专利号</th><th>名称</th><th>类型</th><th>删除时间</th><th>操作</th>
+                                        </tr></thead>
+                                        <tbody id="recycleBody">
+                                            <tr id="recycleEmpty"><td colspan="5" class="text-center text-muted">回收站为空</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>
