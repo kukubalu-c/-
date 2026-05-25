@@ -181,6 +181,27 @@ async function handleApiRequest(req, res) {
         else if (pathname === '/api/db/backup' && method === 'POST') {
             result = { success: db.backup() };
         }
+        // === 备份文件列表 ===
+        else if (pathname === '/api/db/backups' && method === 'GET') {
+            const backupDir = path.join(DATA_DIR, 'backups');
+            if (fs.existsSync(backupDir)) {
+                const files = fs.readdirSync(backupDir)
+                    .filter(f => f.endsWith('.db'))
+                    .map(f => {
+                        const stat = fs.statSync(path.join(backupDir, f));
+                        return {
+                            name: f,
+                            size: stat.size,
+                            created_at: stat.birthtime || stat.mtime,
+                            path: path.join(backupDir, f)
+                        };
+                    })
+                    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                result = { backups: files };
+            } else {
+                result = { backups: [] };
+            }
+        }
         else {
             res.writeHead(404);
             res.end(JSON.stringify({ error: 'API not found' }));

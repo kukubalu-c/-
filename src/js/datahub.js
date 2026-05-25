@@ -119,6 +119,8 @@ async function exportToExcel() {
 // ============================================
 function initRecycle() {
     loadRecycleBin();
+    loadBackups();
+    document.getElementById('btnRefreshBackups').addEventListener('click', loadBackups);
 }
 
 /**
@@ -166,6 +168,33 @@ async function restorePatent(id) {
         [id]
     );
     loadRecycleBin();
+}
+
+/**
+ * 函数名：loadBackups
+ * 作用：加载并显示备份文件列表
+ * 参数：无
+ * 返回值：Promise<void>
+ * 使用场景：进入回收站或点击"刷新"按钮时
+ */
+async function loadBackups() {
+    const tbody = document.getElementById('backupBody');
+    try {
+        const backups = await window.patentAPI.getBackups();
+        if (backups.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">暂无备份</td></tr>';
+            return;
+        }
+        let html = '';
+        backups.forEach(b => {
+            const sizeKB = (b.size / 1024).toFixed(1);
+            const time = new Date(b.created_at).toLocaleString('zh-CN');
+            html += `<tr><td>${b.name}</td><td>${sizeKB} KB</td><td>${time}</td><td style="font-size:12px;">${b.path}</td></tr>`;
+        });
+        tbody.innerHTML = html;
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted">加载失败：${err.message}</td>`;
+    }
 }
 
 /**

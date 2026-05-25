@@ -256,7 +256,8 @@
 
                     <!-- ====== 回收站 ====== -->
                     <div id="subRecycle" class="sub-page">
-                        <div class="card">
+                        <!-- 回收站内容 -->
+                        <div class="card" style="margin-bottom:16px;">
                             <div class="card-header"><span class="card-title">回收站</span></div>
                             <div class="card-body">
                                 <div id="recycleList">
@@ -266,6 +267,25 @@
                                         </tr></thead>
                                         <tbody id="recycleBody">
                                             <tr id="recycleEmpty"><td colspan="5" class="text-center text-muted">回收站为空</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- 备份查看入口 -->
+                        <div class="card">
+                            <div class="card-header">
+                                <span class="card-title">数据备份</span>
+                                <button class="btn btn-default btn-sm" id="btnRefreshBackups" style="float:right;">刷新</button>
+                            </div>
+                            <div class="card-body">
+                                <div id="backupList">
+                                    <table class="import-table">
+                                        <thead><tr>
+                                            <th>备份文件</th><th>大小</th><th>备份时间</th><th>备份地址</th>
+                                        </tr></thead>
+                                        <tbody id="backupBody">
+                                            <tr><td colspan="4" class="text-center text-muted">加载中...</td></tr>
                                         </tbody>
                                     </table>
                                 </div>

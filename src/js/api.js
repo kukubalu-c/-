@@ -74,6 +74,10 @@
             const result = await apiPost('/db/backup', {});
             return result.success;
         },
+        getBackups: async () => {
+            const result = await apiGet('/db/backups');
+            return result.backups;
+        },
 
         // === 文件对话框（浏览器版暂不支持，返回 null） ===
         openFileDialog: () => null,
