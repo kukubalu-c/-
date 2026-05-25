@@ -85,120 +85,121 @@
                 </div>
 
                 <div id="workbenchPage" class="page-content">
-                    <div class="placeholder">
+                    <!-- 作用：工作台功能按钮区 -->
+                    <div class="wb-toolbar">
+                        <button class="btn btn-primary" id="btnManualEntry">手动录入</button>
+                    </div>
+                    <!-- 作用：手动录入表单（点击按钮后显示） -->
+                    <div id="manualFormCard" class="card hidden" style="margin-bottom:16px;">
+                        <div class="card-header">
+                            <span class="card-title">新增专利</span>
+                        </div>
+                        <div class="card-body">
+                            <form id="patentForm">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>专利号/申请号 <span class="required">*</span></label>
+                                        <input type="text" id="fPatentNo" placeholder="如 202310123456.7">
+                                        <span class="field-hint">13位数字 + 小数点 + 1位校验位</span>
+                                        <span id="fPatentNoError" class="field-error hidden"></span>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>专利名称 <span class="required">*</span></label>
+                                        <input type="text" id="fPatentName" placeholder="请输入专利名称">
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>专利类型 <span class="required">*</span></label>
+                                        <select id="fPatentType">
+                                            <option value="">请选择</option>
+                                            <option value="发明">发明</option>
+                                            <option value="实用新型">实用新型</option>
+                                            <option value="外观设计">外观设计</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>权利状态</label>
+                                        <select id="fStatus">
+                                            <option value="撰写中">撰写中</option>
+                                            <option value="已申请">已申请</option>
+                                            <option value="已受理">已受理</option>
+                                            <option value="形式审查中">形式审查中</option>
+                                            <option value="实质审查中">实质审查中</option>
+                                            <option value="OA答复中">OA答复中</option>
+                                            <option value="通知授权">通知授权</option>
+                                            <option value="专利权生效">专利权生效</option>
+                                            <option value="已驳回">已驳回</option>
+                                            <option value="已撤回">已撤回</option>
+                                            <option value="已终止">已终止</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>发明人</label>
+                                        <input type="text" id="fInventor" placeholder="多个发明人用逗号分隔">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>申请人</label>
+                                        <input type="text" id="fApplicant" placeholder="申请人名称">
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>申请日期</label>
+                                        <input type="date" id="fApplyDate">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>授权公告日</label>
+                                        <input type="date" id="fAuthorizeDate">
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>费减比例</label>
+                                        <select id="fFeeReduction">
+                                            <option value="无">无（全额）</option>
+                                            <option value="个人">个人（85%费减）</option>
+                                            <option value="小微企业">小微企业（85%费减）</option>
+                                            <option value="普通企业">普通企业（70%费减）</option>
+                                            <option value="事业高校">事业高校（100%费减）</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>备注</label>
+                                        <input type="text" id="fNotes" placeholder="可选备注信息">
+                                    </div>
+                                </div>
+                                <div class="form-actions">
+                                    <span id="fFormMessage" class="form-msg hidden"></span>
+                                    <button type="button" class="btn btn-primary" id="btnSavePatent">保存</button>
+                                    <button type="button" class="btn btn-default" id="btnResetForm">重置</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    <!-- 作用：专利列表区域（后续阶段开发） -->
+                    <div class="placeholder" id="patentListPlaceholder">
                         <div class="placeholder-icon">
                             <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
                         </div>
                         <h3>工作台</h3>
-                        <p>专利管理与日常操作</p>
-                        <span class="placeholder-badge">待开发</span>
+                        <p>点击上方"手动录入"开始录入专利</p>
+                        <span class="placeholder-badge">专利列表待开发</span>
                     </div>
                 </div>
 
                 <div id="datahubPage" class="page-content">
                     <!-- 作用：数据中心子标签导航 -->
                     <div class="sub-tabs">
-                        <button class="sub-tab active" data-subpage="manual">手动录入</button>
-                        <button class="sub-tab" data-subpage="import">Excel导入</button>
+                        <button class="sub-tab active" data-subpage="import">Excel导入</button>
                         <button class="sub-tab" data-subpage="export">导出</button>
                         <button class="sub-tab" data-subpage="recycle">回收站</button>
                     </div>
 
-                    <!-- ====== 手动录入 ====== -->
-                    <div id="subManual" class="sub-page active">
-                        <div class="card">
-                            <div class="card-header">
-                                <span class="card-title">新增专利</span>
-                            </div>
-                            <div class="card-body">
-                                <form id="patentForm">
-                                    <div class="form-row">
-                                        <div class="form-group">
-                                            <label>专利号/申请号 <span class="required">*</span></label>
-                                            <input type="text" id="fPatentNo" placeholder="如 202310123456.7">
-                                            <span class="field-hint">13位数字 + 小数点 + 1位校验位</span>
-                                            <span id="fPatentNoError" class="field-error hidden"></span>
-                                        </div>
-                                        <div class="form-group">
-                                            <label>专利名称 <span class="required">*</span></label>
-                                            <input type="text" id="fPatentName" placeholder="请输入专利名称">
-                                        </div>
-                                    </div>
-                                    <div class="form-row">
-                                        <div class="form-group">
-                                            <label>专利类型 <span class="required">*</span></label>
-                                            <select id="fPatentType">
-                                                <option value="">请选择</option>
-                                                <option value="发明">发明</option>
-                                                <option value="实用新型">实用新型</option>
-                                                <option value="外观设计">外观设计</option>
-                                            </select>
-                                        </div>
-                                        <div class="form-group">
-                                            <label>权利状态</label>
-                                            <select id="fStatus">
-                                                <option value="撰写中">撰写中</option>
-                                                <option value="已申请">已申请</option>
-                                                <option value="已受理">已受理</option>
-                                                <option value="形式审查中">形式审查中</option>
-                                                <option value="实质审查中">实质审查中</option>
-                                                <option value="OA答复中">OA答复中</option>
-                                                <option value="通知授权">通知授权</option>
-                                                <option value="专利权生效">专利权生效</option>
-                                                <option value="已驳回">已驳回</option>
-                                                <option value="已撤回">已撤回</option>
-                                                <option value="已终止">已终止</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <div class="form-row">
-                                        <div class="form-group">
-                                            <label>发明人</label>
-                                            <input type="text" id="fInventor" placeholder="多个发明人用逗号分隔">
-                                        </div>
-                                        <div class="form-group">
-                                            <label>申请人</label>
-                                            <input type="text" id="fApplicant" placeholder="申请人名称">
-                                        </div>
-                                    </div>
-                                    <div class="form-row">
-                                        <div class="form-group">
-                                            <label>申请日期</label>
-                                            <input type="date" id="fApplyDate">
-                                        </div>
-                                        <div class="form-group">
-                                            <label>授权公告日</label>
-                                            <input type="date" id="fAuthorizeDate">
-                                        </div>
-                                    </div>
-                                    <div class="form-row">
-                                        <div class="form-group">
-                                            <label>费减比例</label>
-                                            <select id="fFeeReduction">
-                                                <option value="无">无（全额）</option>
-                                                <option value="个人">个人（85%费减）</option>
-                                                <option value="小微企业">小微企业（85%费减）</option>
-                                                <option value="普通企业">普通企业（70%费减）</option>
-                                                <option value="事业高校">事业高校（100%费减）</option>
-                                            </select>
-                                        </div>
-                                        <div class="form-group">
-                                            <label>备注</label>
-                                            <input type="text" id="fNotes" placeholder="可选备注信息">
-                                        </div>
-                                    </div>
-                                    <div class="form-actions">
-                                        <span id="fFormMessage" class="form-msg hidden"></span>
-                                        <button type="button" class="btn btn-primary" id="btnSavePatent">保存</button>
-                                        <button type="button" class="btn btn-default" id="btnResetForm">重置</button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- ====== Excel导入 ====== -->
-                    <div id="subImport" class="sub-page">
+                    <div id="subImport" class="sub-page active">
                         <div class="card">
                             <div class="card-header">
                                 <span class="card-title">Excel 批量导入</span>
@@ -253,6 +254,7 @@
     <script src="/node_modules/xlsx/dist/xlsx.full.min.js"></script>
     <script src="js/api.js"></script>
     <script src="js/login.js"></script>
+    <script src="js/workbench.js"></script>
     <script src="js/datahub.js"></script>
 </body>
 </html>
