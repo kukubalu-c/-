@@ -759,8 +759,13 @@ body {
     font-size: 12px;
     margin-left: 4px;
 }
+.warning-dot-green {
+    background: #52c41a;
+    box-shadow: 0 0 4px rgba(82,196,26,0.4);
+}
 .warning-text-red { color: #f5222d; }
 .warning-text-yellow { color: #faad14; }
+.warning-text-green { color: #52c41a; }
 
 /* ============================================ */
 /* 紧迫任务文本 */

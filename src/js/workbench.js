@@ -152,6 +152,54 @@ function showFormMsg(text, type) {
 }
 
 // ============================================
+// 中国专利年费标准及工具函数
+// ============================================
+const ANNUAL_FEE_STANDARDS = {
+    '发明': [
+        { min: 1, max: 3, amount: 900 },
+        { min: 4, max: 6, amount: 1200 },
+        { min: 7, max: 8, amount: 2000 },
+        { min: 9, max: 10, amount: 4000 },
+        { min: 11, max: 12, amount: 4000 },
+        { min: 13, max: 15, amount: 6000 },
+        { min: 16, max: 20, amount: 8000 },
+    ],
+    '实用新型': [
+        { min: 1, max: 3, amount: 600 },
+        { min: 4, max: 6, amount: 900 },
+        { min: 7, max: 8, amount: 1200 },
+        { min: 9, max: 10, amount: 2000 },
+    ],
+    '外观设计': [
+        { min: 1, max: 3, amount: 600 },
+        { min: 4, max: 6, amount: 900 },
+        { min: 7, max: 8, amount: 1200 },
+        { min: 9, max: 10, amount: 1500 },
+    ],
+};
+const FEE_REDUCTION_RATES = { '无': 1, '个人': 0.15, '小微企业': 0.15, '普通企业': 0.30, '事业高校': 0 };
+
+function getAnnualFeeAmount(patentType, yearIndex) {
+    const standards = ANNUAL_FEE_STANDARDS[patentType] || ANNUAL_FEE_STANDARDS['发明'];
+    for (const range of standards) {
+        if (yearIndex >= range.min && yearIndex <= range.max) return range.amount;
+    }
+    return 0;
+}
+function getMaxYearForType(patentType) {
+    const standards = ANNUAL_FEE_STANDARDS[patentType] || ANNUAL_FEE_STANDARDS['发明'];
+    return standards[standards.length - 1].max;
+}
+function getFeeReductionRate(feeReduction) {
+    return FEE_REDUCTION_RATES[feeReduction] || 1;
+}
+function calculateFeeDueDate(applyDate, yearIndex) {
+    const d = new Date(applyDate);
+    const due = new Date(d.getFullYear() + yearIndex, d.getMonth(), d.getDate());
+    return due.toISOString().slice(0, 10);
+}
+
+// ============================================
 // 工作台 - 专利列表与检索
 // ============================================
 let patentPage = 1;
@@ -305,10 +353,10 @@ async function loadPatentList() {
                     const diffDays = Math.floor((dueDate - today) / (1000 * 60 * 60 * 24));
                     if (diffDays < 0) {
                         warningMap[id] = { level: 'overdue', days: Math.abs(diffDays) };
-                    } else if (diffDays <= 30) {
+                    } else if (diffDays <= 90) {
                         warningMap[id] = { level: 'urgent', days: diffDays };
                     } else {
-                        warningMap[id] = { level: 'none', days: 0 };
+                        warningMap[id] = { level: 'safe', days: 0 };
                     }
                 } else {
                     warningMap[id] = { level: 'none', days: 0 };
@@ -421,6 +469,8 @@ function renderPatentRow(patent, urgent, warning) {
         warningHtml = `<span class="warning-dot warning-dot-red"></span><span class="warning-text warning-text-red">逾期${w.days}天</span>`;
     } else if (w.level === 'urgent') {
         warningHtml = `<span class="warning-dot warning-dot-yellow"></span><span class="warning-text warning-text-yellow">剩余${w.days}天</span>`;
+    } else if (w.level === 'safe') {
+        warningHtml = `<span class="warning-dot warning-dot-green"></span><span class="warning-text warning-text-green">-</span>`;
     }
 
     // 状态标签
@@ -649,7 +699,7 @@ async function completeTask(patentId) {
 
 /**
  * 函数名：confirmTasksComplete
- * 作用：确认将选中的待办任务标记为已完成
+ * 作用：将选中的待办标记为已缴费，并根据规则自动生成下一个待办
  */
 async function confirmTasksComplete() {
     const checked = document.querySelectorAll('.task-checkbox:checked');
@@ -661,17 +711,103 @@ async function confirmTasksComplete() {
 
     try {
         const ids = Array.from(checked).map(cb => parseInt(cb.value));
+        // 先查询任务详情（fee_type、patent_id），用于后续自动生成
+        const placeholders = ids.map(() => '?').join(',');
+        const tasks = await window.patentAPI.dbQuery(
+            "SELECT id, patent_id, fee_type, year_index FROM fee_tasks WHERE id IN (" + placeholders + ")",
+            ids
+        );
+
+        // 更新状态为已缴费
         for (const id of ids) {
             await window.patentAPI.dbRun(
                 "UPDATE fee_tasks SET status = '已缴费', paid_date = date('now','localtime') WHERE id = ?",
                 [id]
             );
         }
+
+        // 按专利分组已完成的费用类型，触发后续任务自动生成
+        const patentActions = {};
+        tasks.forEach(t => {
+            if (!patentActions[t.patent_id]) patentActions[t.patent_id] = new Set();
+            const key = t.fee_type + (t.year_index ? '_' + t.year_index : '');
+            patentActions[t.patent_id].add(key);
+        });
+        for (const pidStr of Object.keys(patentActions)) {
+            await generateNextTasks(parseInt(pidStr), patentActions[pidStr]);
+        }
+
         alert(`已完成 ${ids.length} 项待办`);
         document.getElementById('taskModal').classList.add('hidden');
+        // 备份数据库
+        await window.patentAPI.backupDatabase().catch(() => {});
         loadPatentList();
     } catch (err) {
         alert('操作失败：' + err.message);
+    }
+}
+
+/**
+ * 函数名：generateNextTasks
+ * 作用：根据已完成的费用类型，自动生成下一个待办任务并记录日志
+ * 参数：
+ *   - patentId - number - 专利ID
+ *   - completedActions - Set<string> - 已完成的费用类型集合（如 '年费_2', '授权登记费'）
+ */
+async function generateNextTasks(patentId, completedActions) {
+    const patents = await window.patentAPI.dbQuery("SELECT * FROM patents WHERE id = ?", [patentId]);
+    if (patents.length === 0) return;
+    const p = patents[0];
+
+    // 1) 授权登记费 → 专利权生效 + 生成首年年费
+    if (completedActions.has('授权登记费') && p.apply_date) {
+        await window.patentAPI.dbRun(
+            "UPDATE patents SET status = '专利权生效', authorize_date = COALESCE(authorize_date, date('now','localtime')), updated_at = datetime('now','localtime') WHERE id = ?",
+            [patentId]
+        );
+        const dueDate = calculateFeeDueDate(p.apply_date, 1);
+        const amount = getAnnualFeeAmount(p.patent_type, 1);
+        const finalAmount = Math.round(amount * getFeeReductionRate(p.fee_reduction));
+        await window.patentAPI.dbRun(
+            "INSERT INTO fee_tasks (patent_id, fee_type, year_index, amount, due_date, status) VALUES (?, '年费', 1, ?, ?, '待缴费')",
+            [patentId, finalAmount, dueDate]
+        );
+        await window.patentAPI.dbRun(
+            "INSERT INTO operation_logs (patent_id, action_type, description) VALUES (?, '状态变更', ?)",
+            [patentId, `授权登记费缴纳完成，专利状态自动变更为"专利权生效"，生成首年年费任务（¥${finalAmount}，截止${dueDate}）`]
+        );
+    }
+
+    // 2) 年费 → 自动生成下一年年费
+    for (const action of completedActions) {
+        if (action.startsWith('年费')) {
+            const parts = action.split('_');
+            const completedYear = parts.length > 1 ? parseInt(parts[1]) : null;
+            if (!completedYear || !p.apply_date) continue;
+
+            const nextYear = completedYear + 1;
+            const maxYear = getMaxYearForType(p.patent_type);
+            if (nextYear > maxYear) continue;
+
+            // 检查下一年年费是否已存在（避免重复生成）
+            const existing = await window.patentAPI.dbQuery(
+                "SELECT id FROM fee_tasks WHERE patent_id = ? AND fee_type = '年费' AND year_index = ? AND status = '待缴费'",
+                [patentId, nextYear]
+            );
+            if (existing.length > 0) continue;
+
+            const dueDate = calculateFeeDueDate(p.apply_date, nextYear);
+            const amount = getAnnualFeeAmount(p.patent_type, nextYear);
+            const finalAmount = Math.round(amount * getFeeReductionRate(p.fee_reduction));
+            await window.patentAPI.dbRun(
+                "INSERT INTO fee_tasks (patent_id, fee_type, year_index, amount, due_date, status) VALUES (?, '年费', ?, ?, ?, '待缴费')",
+                [patentId, nextYear, finalAmount, dueDate]
+            );
+            await window.patentAPI.dbRun(
+                "INSERT INTO operation_logs (patent_id, action_type, description) VALUES (?, '任务生成', ?)",
+                [patentId, `第${completedYear}年年费缴纳完成，自动生成第${nextYear}年年费任务（¥${finalAmount}，截止${dueDate}）`]
+            );
+        }
     }
 }
 
