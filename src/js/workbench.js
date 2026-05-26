@@ -223,6 +223,11 @@ function initWorkbenchList() {
     // 确认完成待办
     document.getElementById('btnConfirmTasks').addEventListener('click', confirmTasksComplete);
 
+    // 批量删除
+    document.getElementById('btnBatchDelete').addEventListener('click', batchDelete);
+    // 批量完成待办
+    document.getElementById('btnBatchComplete').addEventListener('click', batchCompleteTask);
+
     // 首次加载
     loadPatentList();
 }
@@ -257,7 +262,7 @@ async function loadPatentList() {
         document.getElementById('totalCount').textContent = `共 ${totalPatents} 条记录`;
 
         if (totalPatents === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:48px;">暂无数据</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:48px;">暂无数据</td></tr>';
             renderPagination();
             return;
         }
@@ -340,7 +345,7 @@ async function loadPatentList() {
 
         renderPagination();
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding:48px;">加载失败：${escapeHtml(err.message)}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding:48px;">加载失败：${escapeHtml(err.message)}</td></tr>`;
     }
 }
 
@@ -403,10 +408,11 @@ function renderPatentRow(patent, urgent, warning) {
     let urgentHtml = '<span class="urgent-none">—</span>';
     if (urgent) {
         const typeLabel = escapeHtml(urgent.fee_type);
-        const yearLabel = urgent.year_index ? `(第${urgent.year_index}年)` : '';
+        const yearLabel = urgent.year_index ? `第${urgent.year_index}年` : '';
         const dueDate = escapeHtml(urgent.due_date);
+        const amount = urgent.amount || 0;
         const isOverdue = new Date(urgent.due_date) < new Date();
-        urgentHtml = `<span class="urgent-task"><span class="fee-type">${typeLabel}${yearLabel}</span> <span class="${isOverdue ? 'overdue' : 'due-date'}">${dueDate}</span></span>`;
+        urgentHtml = `<div class="urgent-task"><div class="urgent-line1">${yearLabel}${typeLabel}|¥${amount}</div><div class="urgent-line2 ${isOverdue ? 'overdue' : 'due-date'}">截止${dueDate}</div></div>`;
     }
 
     // 预警灯 + 天数
@@ -427,10 +433,6 @@ function renderPatentRow(patent, urgent, warning) {
         <td><div class="patent-name-cell">${nameHtml}</div></td>
         <td class="col-status">${statusHtml}</td>
         <td>${urgentHtml}</td>
-        <td class="col-actions">
-            <button class="btn btn-sm" onclick="event.stopPropagation();deletePatent(${patent.id})">删除</button>
-            <button class="btn btn-sm" onclick="event.stopPropagation();completeTask(${patent.id})">完成待办</button>
-        </td>
     </tr>`;
 }
 
@@ -536,6 +538,77 @@ async function deletePatent(id) {
         loadPatentList();
     } catch (err) {
         alert('删除失败：' + err.message);
+    }
+}
+
+// ============================================
+// 批量操作
+// ============================================
+
+/**
+ * 函数名：batchDelete
+ * 作用：批量将选中的专利移入回收站
+ */
+async function batchDelete() {
+    const checked = document.querySelectorAll('.patent-checkbox:checked');
+    if (checked.length === 0) { alert('请先勾选要删除的专利'); return; }
+    if (!confirm(`确认将选中的 ${checked.length} 条专利移入回收站？`)) return;
+    const ids = Array.from(checked).map(cb => parseInt(cb.value));
+    try {
+        for (const id of ids) {
+            await window.patentAPI.dbRun(
+                "UPDATE patents SET is_deleted = 1, deleted_at = datetime('now','localtime') WHERE id = ?",
+                [id]
+            );
+        }
+        document.getElementById('checkAll').checked = false;
+        loadPatentList();
+    } catch (err) {
+        alert('批量删除失败：' + err.message);
+    }
+}
+
+/**
+ * 函数名：batchCompleteTask
+ * 作用：批量完成选中专利的所有待缴费任务
+ */
+async function batchCompleteTask() {
+    const checked = document.querySelectorAll('.patent-checkbox:checked');
+    if (checked.length === 0) { alert('请先勾选专利'); return; }
+    const ids = Array.from(checked).map(cb => parseInt(cb.value));
+
+    try {
+        const placeholders = ids.map(() => '?').join(',');
+        const tasks = await window.patentAPI.dbQuery(
+            "SELECT t.id, t.patent_id, t.fee_type, t.year_index, t.due_date, t.amount, p.patent_no FROM fee_tasks t JOIN patents p ON t.patent_id = p.id WHERE t.patent_id IN (" + placeholders + ") AND t.status = '待缴费' ORDER BY t.patent_id, t.due_date ASC",
+            ids
+        );
+
+        const listEl = document.getElementById('taskList');
+        if (tasks.length === 0) {
+            listEl.innerHTML = '<p class="text-muted text-center" style="padding:24px;">所选专利暂无待缴费事项</p>';
+            document.getElementById('btnConfirmTasks').disabled = true;
+        } else {
+            let html = '';
+            let lastPatentNo = '';
+            tasks.forEach(t => {
+                const yearLabel = t.year_index ? ` (第${t.year_index}年)` : '';
+                const patentLabel = t.patent_no !== lastPatentNo ? `<div style="font-size:11px;color:#999;margin:4px 0 2px 0;">${escapeHtml(t.patent_no)}</div>` : '';
+                lastPatentNo = t.patent_no;
+                html += patentLabel;
+                html += `<label class="task-item">
+                    <input type="checkbox" class="task-checkbox" value="${t.id}">
+                    <span class="task-info">${escapeHtml(t.fee_type)}${yearLabel} - 截止 ${escapeHtml(t.due_date)}</span>
+                    <span class="task-amount">¥${t.amount}</span>
+                </label>`;
+            });
+            listEl.innerHTML = html;
+            document.getElementById('btnConfirmTasks').disabled = false;
+        }
+        document.getElementById('taskModal').dataset.patentId = '';
+        document.getElementById('taskModal').classList.remove('hidden');
+    } catch (err) {
+        alert('加载待办数据失败：' + err.message);
     }
 }
 

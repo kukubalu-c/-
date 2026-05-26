@@ -245,7 +245,11 @@
                         <!-- 表格上方信息栏 -->
                         <div class="wb-table-toolbar">
                             <span class="total-count" id="totalCount">共 0 条记录</span>
-                            <button class="btn btn-primary" id="btnManualEntry">新增</button>
+                            <div class="toolbar-actions">
+                                <button class="btn btn-primary" id="btnManualEntry">新增</button>
+                                <button class="btn btn-default" id="btnBatchDelete">删除</button>
+                                <button class="btn btn-default" id="btnBatchComplete">完成待办</button>
+                            </div>
                         </div>
 
                         <!-- 专利表格 -->
@@ -258,11 +262,10 @@
                                     <th>专利名称</th>
                                     <th class="col-status">权利状态</th>
                                     <th>当前紧迫任务</th>
-                                    <th class="col-actions">操作</th>
                                 </tr>
                             </thead>
                             <tbody id="patentTableBody">
-                                <tr><td colspan="7" class="text-center text-muted" style="padding:48px;">加载中...</td></tr>
+                                <tr><td colspan="6" class="text-center text-muted" style="padding:48px;">加载中...</td></tr>
                             </tbody>
                         </table>
 
