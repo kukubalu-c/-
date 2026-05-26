@@ -193,7 +193,7 @@ async function loadBackups() {
         });
         tbody.innerHTML = html;
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted">加载失败：${err.message}</td>`;
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted">加载失败：${err.message}</td></tr>`;
     }
 }
 

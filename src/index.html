@@ -85,9 +85,10 @@
                 </div>
 
                 <div id="workbenchPage" class="page-content">
-                    <!-- 作用：工作台功能按钮区 -->
-                    <div class="wb-toolbar">
-                        <button class="btn btn-primary" id="btnManualEntry">新增</button>
+                    <!-- 页面标题 -->
+                    <div class="wb-page-header">
+                        <h2>工作台</h2>
+                        <p>管理专利待办任务和缴费</p>
                     </div>
                     <!-- 作用：手动录入表单（点击按钮后显示） -->
                     <div id="manualFormCard" class="card hidden" style="margin-bottom:16px;">
@@ -179,14 +180,94 @@
                             </form>
                         </div>
                     </div>
-                    <!-- 作用：专利列表区域（后续阶段开发） -->
-                    <div class="placeholder" id="patentListPlaceholder">
-                        <div class="placeholder-icon">
-                            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                    <!-- 作用：专利列表区域（搜索栏 + 表格 + 分页） -->
+                    <div id="patentListContainer">
+                        <!-- 搜索栏 -->
+                        <div class="wb-search-bar">
+                            <div class="search-row">
+                                <div class="search-item">
+                                    <label>专利号</label>
+                                    <input type="text" id="sPatentNo" placeholder="输入专利号">
+                                </div>
+                                <div class="search-item">
+                                    <label>专利名称</label>
+                                    <input type="text" id="sPatentName" placeholder="输入名称关键词">
+                                </div>
+                                <div class="search-item">
+                                    <label>专利类型</label>
+                                    <select id="sPatentType">
+                                        <option value="">全部</option>
+                                        <option value="发明">发明</option>
+                                        <option value="实用新型">实用新型</option>
+                                        <option value="外观设计">外观设计</option>
+                                    </select>
+                                </div>
+                                <div class="search-item">
+                                    <label>权利状态</label>
+                                    <select id="sStatus">
+                                        <option value="">全部</option>
+                                        <option value="撰写中">撰写中</option>
+                                        <option value="已申请">已申请</option>
+                                        <option value="已受理">已受理</option>
+                                        <option value="形式审查中">形式审查中</option>
+                                        <option value="实质审查中">实质审查中</option>
+                                        <option value="OA答复中">OA答复中</option>
+                                        <option value="通知授权">通知授权</option>
+                                        <option value="专利权生效">专利权生效</option>
+                                        <option value="已驳回">已驳回</option>
+                                        <option value="已撤回">已撤回</option>
+                                        <option value="已终止">已终止</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="search-row">
+                                <div class="search-item">
+                                    <label>申请日期</label>
+                                    <div class="date-range">
+                                        <input type="date" id="sDateFrom">
+                                        <span>至</span>
+                                        <input type="date" id="sDateTo">
+                                    </div>
+                                </div>
+                                <div class="search-item">
+                                    <label>发明人</label>
+                                    <input type="text" id="sInventor" placeholder="输入发明人">
+                                </div>
+                                <div class="search-item" style="display:flex; align-items:flex-end;">
+                                    <div class="search-actions">
+                                        <button class="btn btn-primary" id="btnSearch">搜索</button>
+                                        <button class="btn btn-default" id="btnResetSearch">重置</button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <h3>工作台</h3>
-                        <p>点击上方"新增"开始录入专利</p>
-                        <span class="placeholder-badge">专利列表待开发</span>
+
+                        <!-- 表格上方信息栏 -->
+                        <div class="wb-table-toolbar">
+                            <span class="total-count" id="totalCount">共 0 条记录</span>
+                            <button class="btn btn-primary" id="btnManualEntry">新增</button>
+                        </div>
+
+                        <!-- 专利表格 -->
+                        <table class="wb-table">
+                            <thead>
+                                <tr>
+                                    <th class="col-checkbox"><input type="checkbox" id="checkAll"></th>
+                                    <th class="col-warning">状态预警</th>
+                                    <th>专利号</th>
+                                    <th>专利名称</th>
+                                    <th class="col-status">权利状态</th>
+                                    <th>当前紧迫任务</th>
+                                    <th class="col-actions">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="patentTableBody">
+                                <tr><td colspan="7" class="text-center text-muted" style="padding:48px;">加载中...</td></tr>
+                            </tbody>
+                        </table>
+
+                        <!-- 分页 -->
+                        <div class="pagination" id="pagination"></div>
                     </div>
                 </div>
 
@@ -294,6 +375,50 @@
                     </div>
                 </div>
             </main>
+        </div>
+
+        <!-- 专利详情弹窗 -->
+        <div class="modal-overlay hidden" id="detailModal">
+            <div class="modal modal-lg">
+                <div class="detail-header">
+                    <h3 id="detailTitle">专利详情</h3>
+                    <button class="detail-close" id="detailClose">&times;</button>
+                </div>
+                <div class="detail-grid" id="detailGrid"></div>
+                <h4 class="detail-section-title">缴费记录</h4>
+                <div class="detail-table-wrap" id="detailFeeWrap">
+                    <table class="import-table">
+                        <thead><tr><th>费用类型</th><th>年份</th><th>应缴金额</th><th>实缴金额</th><th>截止日期</th><th>状态</th></tr></thead>
+                        <tbody id="detailFeeBody"><tr><td colspan="6" class="text-center text-muted">暂无记录</td></tr></tbody>
+                    </table>
+                </div>
+                <h4 class="detail-section-title">操作日志</h4>
+                <div class="detail-table-wrap" id="detailLogWrap">
+                    <table class="import-table">
+                        <thead><tr><th>操作</th><th>详情</th><th>时间</th></tr></thead>
+                        <tbody id="detailLogBody"><tr><td colspan="3" class="text-center text-muted">暂无记录</td></tr></tbody>
+                    </table>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-default" id="detailCloseBtn">关闭</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 完成待办弹窗 -->
+        <div class="modal-overlay hidden" id="taskModal">
+            <div class="modal">
+                <div class="detail-header">
+                    <h4>完成待办事项</h4>
+                    <button class="detail-close" id="taskModalClose">&times;</button>
+                </div>
+                <p class="text-muted mb-16">选择要标记为已完成的待办事项：</p>
+                <div class="task-list" id="taskList"></div>
+                <div class="modal-actions">
+                    <button class="btn btn-primary" id="btnConfirmTasks">确认完成</button>
+                    <button class="btn btn-default" id="btnCancelTasks">取消</button>
+                </div>
+            </div>
         </div>
     </div>
 
