@@ -113,12 +113,12 @@ async function savePatent() {
     // 收集表单数据
     const patentNo = document.getElementById('fPatentNo').value.trim();
     const patentName = document.getElementById('fPatentName').value.trim();
-    const patentType = document.getElementById('fPatentType').value;
+    const patentType = document.getElementById('fPatentTypeForm').value;
     const inventor = document.getElementById('fInventor').value.trim();
     const applicant = document.getElementById('fApplicant').value.trim();
     const applyDate = document.getElementById('fApplyDate').value;
     const authorizeDate = document.getElementById('fAuthorizeDate').value;
-    const status = document.getElementById('fStatus').value;
+    const status = document.getElementById('fStatusForm').value;
     const feeReduction = document.getElementById('fFeeReduction').value;
     const notes = document.getElementById('fNotes').value.trim();
 
@@ -444,7 +444,7 @@ async function loadPatentList() {
 
             if (totalPatents === 0) {
                 document.getElementById('totalCount').textContent = '共 0 条记录';
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:48px;">暂无数据</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:48px;">暂无数据</td></tr>';
                 renderPagination();
                 return;
             }
@@ -467,7 +467,7 @@ async function loadPatentList() {
         document.getElementById('totalCount').textContent = `共 ${totalPatents} 条记录`;
 
         if ($patents.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:48px;">暂无数据</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:48px;">暂无数据</td></tr>';
             renderPagination();
             return;
         }
@@ -500,7 +500,7 @@ async function loadPatentList() {
 
         renderPagination();
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding:48px;">加载失败：${escapeHtml(err.message)}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding:48px;">加载失败：${escapeHtml(err.message)}</td></tr>`;
     }
 }
 
@@ -627,6 +627,7 @@ function renderPatentRow(patent, urgent, warning) {
         <td class="col-checkbox"><input type="checkbox" class="patent-checkbox" value="${patent.id}"></td>
         <td class="col-warning">${warningHtml}</td>
         <td>${noHtml}</td>
+        <td class="col-type">${escapeHtml(patent.patent_type || '-')}</td>
         <td><div class="patent-name-cell">${nameHtml}</div></td>
         <td class="col-status">${statusHtml}</td>
         <td>${urgentHtml}</td>
@@ -1113,7 +1114,7 @@ async function renderDetailFees(id) {
     );
     const body = document.getElementById('pdFeeBody');
     if (fees.length === 0) {
-        body.innerHTML = '<tr><td colspan="6" class="text-center text-muted">暂无记录</td></tr>';
+        body.innerHTML = '<tr><td colspan="7" class="text-center text-muted">暂无记录</td></tr>';
         return;
     }
     let html = '';

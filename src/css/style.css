@@ -790,6 +790,10 @@ body {
 .wb-table .col-status {
     width: 100px;
 }
+.wb-table .col-type {
+    width: 90px;
+    text-align: center;
+}
 .wb-table .col-warning {
     width: 100px;
     white-space: nowrap;

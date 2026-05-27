@@ -114,7 +114,7 @@
                                     <div class="form-row">
                                         <div class="form-group">
                                             <label>专利类型 <span class="required">*</span></label>
-                                            <select id="fPatentType">
+                                            <select id="fPatentTypeForm">
                                                 <option value="">请选择</option>
                                                 <option value="发明">发明</option>
                                                 <option value="实用新型">实用新型</option>
@@ -123,7 +123,7 @@
                                         </div>
                                         <div class="form-group">
                                             <label>权利状态</label>
-                                            <select id="fStatus">
+                                            <select id="fStatusForm">
                                                 <option value="撰写中">撰写中</option>
                                                 <option value="已申请">已申请</option>
                                                 <option value="形式审查中">形式审查中</option>
@@ -268,13 +268,14 @@
                                     <th class="col-checkbox"><input type="checkbox" id="checkAll"></th>
                                     <th class="col-warning">状态预警</th>
                                     <th>专利号</th>
+                                    <th class="col-type">专利类型</th>
                                     <th>专利名称</th>
                                     <th class="col-status">权利状态</th>
                                     <th>当前紧迫任务</th>
                                 </tr>
                             </thead>
                             <tbody id="patentTableBody">
-                                <tr><td colspan="6" class="text-center text-muted" style="padding:48px;">加载中...</td></tr>
+                                <tr><td colspan="7" class="text-center text-muted" style="padding:48px;">加载中...</td></tr>
                             </tbody>
                         </table>
 
