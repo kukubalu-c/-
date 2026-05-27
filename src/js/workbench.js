@@ -43,12 +43,29 @@ document.addEventListener('DOMContentLoaded', () => {
 // 手动录入
 // ============================================
 function initManualEntry() {
+    const modal = document.getElementById('manualModal');
     const btnEntry = document.getElementById('btnManualEntry');
-    const formCard = document.getElementById('manualFormCard');
+    const btnClose = document.getElementById('manualModalClose');
+    const btnSave = document.getElementById('btnSavePatent');
+    const btnReset = document.getElementById('btnResetForm');
+    const form = document.getElementById('patentForm');
 
-    // 点击"手动录入"按钮切换表单显示
+    // 点击"新增"按钮打开弹窗
     btnEntry.addEventListener('click', () => {
-        formCard.classList.toggle('hidden');
+        modal.classList.remove('hidden');
+        // 重置表单和错误提示
+        form.reset();
+        document.getElementById('fPatentNoError').classList.add('hidden');
+        document.getElementById('fFormMessage').classList.add('hidden');
+    });
+
+    // 关闭弹窗
+    function closeModal() {
+        modal.classList.add('hidden');
+    }
+    btnClose.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
     });
 
     // 专利号实时校验
@@ -64,20 +81,20 @@ function initManualEntry() {
     });
 
     // 保存按钮
-    document.getElementById('btnSavePatent').addEventListener('click', savePatent);
+    btnSave.addEventListener('click', savePatent);
 
     // 重置按钮
-    document.getElementById('btnResetForm').addEventListener('click', () => {
-        document.getElementById('patentForm').reset();
+    btnReset.addEventListener('click', () => {
+        form.reset();
         document.getElementById('fPatentNoError').classList.add('hidden');
         document.getElementById('fFormMessage').classList.add('hidden');
     });
 
     // 回车提交
-    document.getElementById('patentForm').addEventListener('keydown', (e) => {
+    form.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && e.target.tagName !== 'SELECT') {
             e.preventDefault();
-            document.getElementById('btnSavePatent').click();
+            btnSave.click();
         }
     });
 }
@@ -139,6 +156,10 @@ async function savePatent() {
         );
         showFormMsg('保存成功！', 'success');
         document.getElementById('patentForm').reset();
+        // 保存成功后关闭弹窗
+        setTimeout(() => {
+            document.getElementById('manualModal').classList.add('hidden');
+        }, 800);
     } catch (err) {
         showFormMsg('保存失败：' + err.message, 'error');
     }
@@ -228,27 +249,19 @@ function initWorkbenchList() {
         patentPage = 1;
         loadPatentList();
     });
-    // 重置
-    document.getElementById('btnResetSearch').addEventListener('click', () => {
-        document.getElementById('sPatentNo').value = '';
-        document.getElementById('sPatentName').value = '';
-        document.getElementById('sPatentType').value = '';
-        document.getElementById('sStatus').value = '';
-        document.getElementById('sDateFrom').value = '';
-        document.getElementById('sDateTo').value = '';
-        document.getElementById('sInventor').value = '';
-        patentPage = 1;
-        currentFilters = {};
-        loadPatentList();
-    });
     // 回车触发搜索
-    document.querySelectorAll('.search-item input, .search-item select').forEach(el => {
+    document.querySelectorAll('.search-item input, .search-item select, .filter-item select').forEach(el => {
         el.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 patentPage = 1;
                 loadPatentList();
             }
         });
+    });
+    // 筛选面板切换
+    document.getElementById('btnFilterToggle').addEventListener('click', () => {
+        document.getElementById('filterPanel').classList.toggle('hidden');
+        document.getElementById('btnFilterToggle').classList.toggle('active');
     });
     // 全选复选框
     document.getElementById('checkAll').addEventListener('change', function () {
@@ -289,91 +302,89 @@ async function loadPatentList() {
 
     // 收集筛选条件
     currentFilters = {
-        patent_no: document.getElementById('sPatentNo').value.trim(),
-        patent_name: document.getElementById('sPatentName').value.trim(),
-        patent_type: document.getElementById('sPatentType').value,
-        status: document.getElementById('sStatus').value,
+        keyword: document.getElementById('sKeyword').value.trim(),
+        patent_type: document.getElementById('fPatentType').value,
+        status: document.getElementById('fStatus').value,
+        warning: document.getElementById('fWarning').value,
         date_from: document.getElementById('sDateFrom').value,
-        date_to: document.getElementById('sDateTo').value,
-        inventor: document.getElementById('sInventor').value.trim()
+        date_to: document.getElementById('sDateTo').value
     };
 
     const { where, params } = buildWhereClause(currentFilters);
+    const hasWarningFilter = !!currentFilters.warning;
 
     try {
-        // 查询总数
-        const countResult = await window.patentAPI.dbQuery(
-            "SELECT COUNT(*) as total FROM patents WHERE is_deleted = 0" + where,
-            params
-        );
-        totalPatents = countResult[0].total;
+        let $patents;
+        let urgentMap = {};
+        let warningMap = {};
+
+        if (hasWarningFilter) {
+            // 有预警筛选时：查询全部数据，JS计算预警后过滤，再切片分页
+            const all = await window.patentAPI.dbQuery(
+                "SELECT id, patent_no, patent_name, patent_type, status, apply_date FROM patents WHERE is_deleted = 0" + where + " ORDER BY created_at DESC",
+                params
+            );
+            const result = await computeWarningMap(all);
+            warningMap = result.warningMap;
+            urgentMap = result.urgentMap;
+
+            const filtered = all.filter(p => {
+                const w = warningMap[p.id] || { level: 'none' };
+                return w.level === currentFilters.warning;
+            });
+            totalPatents = filtered.length;
+
+            const totalPages = Math.ceil(totalPatents / pageSize) || 1;
+            if (patentPage > totalPages) patentPage = totalPages;
+            const offset = (patentPage - 1) * pageSize;
+            $patents = filtered.slice(offset, offset + pageSize);
+        } else {
+            // 无预警筛选：使用 SQL 分页
+            const countResult = await window.patentAPI.dbQuery(
+                "SELECT COUNT(*) as total FROM patents WHERE is_deleted = 0" + where,
+                params
+            );
+            totalPatents = countResult[0].total;
+
+            if (totalPatents === 0) {
+                document.getElementById('totalCount').textContent = '共 0 条记录';
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:48px;">暂无数据</td></tr>';
+                renderPagination();
+                return;
+            }
+
+            const totalPages = Math.ceil(totalPatents / pageSize);
+            if (patentPage > totalPages) patentPage = totalPages;
+
+            const offset = (patentPage - 1) * pageSize;
+            $patents = await window.patentAPI.dbQuery(
+                "SELECT id, patent_no, patent_name, patent_type, status, apply_date FROM patents WHERE is_deleted = 0" + where + " ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                [...params, pageSize, offset]
+            );
+
+            const result = await computeWarningMap($patents);
+            warningMap = result.warningMap;
+            urgentMap = result.urgentMap;
+        }
+
+        // ==== 公共渲染 ====
         document.getElementById('totalCount').textContent = `共 ${totalPatents} 条记录`;
 
-        if (totalPatents === 0) {
+        if ($patents.length === 0) {
             tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:48px;">暂无数据</td></tr>';
             renderPagination();
             return;
         }
 
-        // 计算总页数
-        const totalPages = Math.ceil(totalPatents / pageSize);
-        if (patentPage > totalPages) patentPage = totalPages;
-
-        // 查询分页数据
-        const offset = (patentPage - 1) * pageSize;
-        const patents = await window.patentAPI.dbQuery(
-            "SELECT id, patent_no, patent_name, patent_type, status, apply_date FROM patents WHERE is_deleted = 0" + where + " ORDER BY created_at DESC LIMIT ? OFFSET ?",
-            [...params, pageSize, offset]
-        );
-
-        // 批量查询紧迫任务和预警
-        const patentIds = patents.map(p => p.id);
-        let urgentMap = {};
-        let warningMap = {};
-        if (patentIds.length > 0) {
-            const placeholders = patentIds.map(() => '?').join(',');
-            const tasks = await window.patentAPI.dbQuery(
-                "SELECT patent_id, fee_type, year_index, due_date, amount FROM fee_tasks WHERE patent_id IN (" + placeholders + ") AND status = '待缴费' ORDER BY patent_id, due_date ASC",
-                patentIds
-            );
-            // 按 patent_id 分组，取最早到期任务
-            const grouped = {};
-            tasks.forEach(t => {
-                if (!grouped[t.patent_id]) grouped[t.patent_id] = [];
-                grouped[t.patent_id].push(t);
-            });
-            const today = new Date();
-            patentIds.forEach(id => {
-                const list = grouped[id] || [];
-                urgentMap[id] = list.length > 0 ? list[0] : null;
-                if (list.length > 0) {
-                    const sorted = [...list].sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
-                    const earliest = sorted[0];
-                    const dueDate = new Date(earliest.due_date);
-                    const diffDays = Math.floor((dueDate - today) / (1000 * 60 * 60 * 24));
-                    if (diffDays < 0) {
-                        warningMap[id] = { level: 'overdue', days: Math.abs(diffDays) };
-                    } else if (diffDays <= 90) {
-                        warningMap[id] = { level: 'urgent', days: diffDays };
-                    } else {
-                        warningMap[id] = { level: 'safe', days: 0 };
-                    }
-                } else {
-                    warningMap[id] = { level: 'none', days: 0 };
-                }
-            });
-        }
-
-        // 渲染表格
         let html = '';
-        patents.forEach(p => {
+        $patents.forEach(p => {
             const urgent = urgentMap[p.id];
             const warning = warningMap[p.id] || { level: 'none', days: 0 };
             html += renderPatentRow(p, urgent, warning);
         });
         tbody.innerHTML = html;
 
-        // 绑定每行点击事件（点击行弹出详情，点按钮除外）
+        // 绑定每行点击事件
         tbody.querySelectorAll('.clickable-row').forEach(row => {
             row.addEventListener('click', (e) => {
                 if (e.target.closest('.col-actions')) return;
@@ -382,7 +393,7 @@ async function loadPatentList() {
             });
         });
 
-        // 绑定行内复选框事件（联动全选状态）
+        // 绑定行内复选框事件
         tbody.querySelectorAll('.patent-checkbox').forEach(cb => {
             cb.addEventListener('change', () => {
                 const all = document.querySelectorAll('.patent-checkbox');
@@ -408,13 +419,10 @@ function buildWhereClause(filters) {
     const conditions = [];
     const params = [];
 
-    if (filters.patent_no) {
-        conditions.push("patent_no LIKE ?");
-        params.push('%' + filters.patent_no + '%');
-    }
-    if (filters.patent_name) {
-        conditions.push("patent_name LIKE ?");
-        params.push('%' + filters.patent_name + '%');
+    if (filters.keyword) {
+        conditions.push("(patent_no LIKE ? OR patent_name LIKE ? OR inventor LIKE ?)");
+        const kw = '%' + filters.keyword + '%';
+        params.push(kw, kw, kw);
     }
     if (filters.patent_type) {
         conditions.push("patent_type = ?");
@@ -432,15 +440,58 @@ function buildWhereClause(filters) {
         conditions.push("apply_date <= ?");
         params.push(filters.date_to);
     }
-    if (filters.inventor) {
-        conditions.push("inventor LIKE ?");
-        params.push('%' + filters.inventor + '%');
-    }
 
     return {
         where: conditions.length > 0 ? ' AND ' + conditions.join(' AND ') : '',
         params: params
     };
+}
+
+/**
+ * 函数名：computeWarningMap
+ * 作用：根据专利列表批量查询 fee_tasks，计算预警等级和紧迫任务
+ */
+async function computeWarningMap(patents) {
+    const patentIds = patents.map(p => p.id);
+    const urgentMap = {};
+    const warningMap = {};
+
+    if (patentIds.length === 0) return { urgentMap, warningMap };
+
+    const placeholders = patentIds.map(() => '?').join(',');
+    const tasks = await window.patentAPI.dbQuery(
+        "SELECT patent_id, fee_type, year_index, due_date, amount FROM fee_tasks WHERE patent_id IN (" + placeholders + ") AND status = '待缴费' ORDER BY patent_id, due_date ASC",
+        patentIds
+    );
+
+    const grouped = {};
+    tasks.forEach(t => {
+        if (!grouped[t.patent_id]) grouped[t.patent_id] = [];
+        grouped[t.patent_id].push(t);
+    });
+
+    const today = new Date();
+    patentIds.forEach(id => {
+        const list = grouped[id] || [];
+        urgentMap[id] = list.length > 0 ? list[0] : null;
+        if (list.length > 0) {
+            const sorted = [...list].sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
+            const earliest = sorted[0];
+            const dueDate = new Date(earliest.due_date);
+            const diffDays = Math.floor((dueDate - today) / (1000 * 60 * 60 * 24));
+            if (diffDays < 0) {
+                warningMap[id] = { level: 'overdue', days: Math.abs(diffDays) };
+            } else if (diffDays <= 90) {
+                warningMap[id] = { level: 'urgent', days: diffDays };
+            } else {
+                warningMap[id] = { level: 'safe', days: 0 };
+            }
+        } else {
+            warningMap[id] = { level: 'none', days: 0 };
+        }
+    });
+
+    return { urgentMap, warningMap };
 }
 
 /**
