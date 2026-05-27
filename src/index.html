@@ -458,6 +458,37 @@
         </div>
     </div>
 
+    <!-- 自定义确认弹窗 -->
+    <div class="modal-overlay hidden" id="confirmModal">
+        <div class="modal modal-sm">
+            <div class="modal-header">
+                <h4>确认操作</h4>
+            </div>
+            <div class="modal-body">
+                <p id="confirmMessage" style="font-size:14px;color:#333;"></p>
+            </div>
+            <div class="modal-actions" style="padding: 0 24px 24px;">
+                <button class="btn btn-primary" id="btnConfirmOk">确认</button>
+                <button class="btn btn-default" id="btnConfirmCancel">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 自定义提示弹窗 -->
+    <div class="modal-overlay hidden" id="alertModal">
+        <div class="modal modal-sm">
+            <div class="modal-header">
+                <h4>提示</h4>
+            </div>
+            <div class="modal-body">
+                <p id="alertMessage" style="font-size:14px;color:#333;"></p>
+            </div>
+            <div class="modal-actions" style="padding: 0 24px 24px;">
+                <button class="btn btn-primary" id="btnAlertOk">确定</button>
+            </div>
+        </div>
+    </div>
+
     <script src="/node_modules/xlsx/dist/xlsx.full.min.js"></script>
     <script src="js/api.js"></script>
     <script src="js/login.js"></script>

@@ -240,6 +240,73 @@ function escapeHtml(str) {
 }
 
 /**
+ * 函数名：showConfirmModal
+ * 作用：显示自定义确认弹窗，返回 Promise<boolean>
+ */
+function showConfirmModal(message) {
+    return new Promise(resolve => {
+        const overlay = document.getElementById('confirmModal');
+        const msgEl = document.getElementById('confirmMessage');
+        msgEl.textContent = message;
+        overlay.classList.remove('hidden');
+
+        const okBtn = document.getElementById('btnConfirmOk');
+        const cancelBtn = document.getElementById('btnConfirmCancel');
+        // 移除之前绑定的监听器，用新的一次性监听
+        const okHandler = () => {
+            overlay.classList.add('hidden');
+            okBtn.removeEventListener('click', okHandler);
+            cancelBtn.removeEventListener('click', cancelHandler);
+            resolve(true);
+        };
+        const cancelHandler = () => {
+            overlay.classList.add('hidden');
+            okBtn.removeEventListener('click', okHandler);
+            cancelBtn.removeEventListener('click', cancelHandler);
+            resolve(false);
+        };
+        // 点击遮罩层也视为取消
+        const overlayHandler = (e) => {
+            if (e.target === e.currentTarget) {
+                cancelHandler();
+                overlay.removeEventListener('click', overlayHandler);
+            }
+        };
+        okBtn.addEventListener('click', okHandler);
+        cancelBtn.addEventListener('click', cancelHandler);
+        overlay.addEventListener('click', overlayHandler);
+    });
+}
+
+/**
+ * 函数名：showAlertModal
+ * 作用：显示自定义提示弹窗，返回 Promise
+ */
+function showAlertModal(message) {
+    return new Promise(resolve => {
+        const overlay = document.getElementById('alertModal');
+        const msgEl = document.getElementById('alertMessage');
+        msgEl.textContent = message;
+        overlay.classList.remove('hidden');
+
+        const okBtn = document.getElementById('btnAlertOk');
+        const handler = () => {
+            overlay.classList.add('hidden');
+            okBtn.removeEventListener('click', handler);
+            overlay.removeEventListener('click', overlayHandler);
+            resolve();
+        };
+        const overlayHandler = (e) => {
+            if (e.target === e.currentTarget) {
+                handler();
+            }
+        };
+        okBtn.addEventListener('click', handler);
+        overlay.addEventListener('click', overlayHandler);
+    });
+}
+
+/**
  * 函数名：initWorkbenchList
  * 作用：初始化专利列表（搜索、分页、复选框事件，首次加载）
  */
@@ -275,8 +342,8 @@ function initWorkbenchList() {
     document.getElementById('btnDetailDelete').addEventListener('click', deleteCurrentPatent);
     // 专利详情页 - 保存/取消编辑
     document.getElementById('btnSaveEdit').addEventListener('click', savePatentEdit);
-    document.getElementById('btnCancelEdit').addEventListener('click', () => {
-        if (confirm('放弃编辑？')) exitEditMode();
+    document.getElementById('btnCancelEdit').addEventListener('click', async () => {
+        if (await showConfirmModal('放弃编辑？')) exitEditMode();
     });
     // 专利详情页 - 标签切换
     document.querySelectorAll('.pd-tab').forEach(tab => {
@@ -296,6 +363,22 @@ function initWorkbenchList() {
     });
     // 确认完成待办
     document.getElementById('btnConfirmTasks').addEventListener('click', confirmTasksComplete);
+
+    // 自定义确认弹窗
+    document.getElementById('btnConfirmCancel').addEventListener('click', () => {
+        document.getElementById('confirmModal').classList.add('hidden');
+    });
+    document.getElementById('confirmModal').addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) {
+            document.getElementById('confirmModal').classList.add('hidden');
+        }
+    });
+    // 自定义提示弹窗 - 点击遮罩层关闭
+    document.getElementById('alertModal').addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) {
+            document.getElementById('alertModal').classList.add('hidden');
+        }
+    });
 
     // 批量删除
     document.getElementById('btnBatchDelete').addEventListener('click', batchDelete);
@@ -643,7 +726,7 @@ function changePageSize(size) {
  * 作用：将指定专利移入回收站
  */
 async function deletePatent(id) {
-    if (!confirm('确认将该专利移入回收站？')) return;
+    if (!await showConfirmModal('确认将该专利移入回收站？')) return;
     try {
         await window.patentAPI.dbRun(
             "UPDATE patents SET is_deleted = 1, deleted_at = datetime('now','localtime') WHERE id = ?",
@@ -651,7 +734,7 @@ async function deletePatent(id) {
         );
         loadPatentList();
     } catch (err) {
-        alert('删除失败：' + err.message);
+        await showAlertModal('删除失败：' + err.message);
     }
 }
 
@@ -665,8 +748,8 @@ async function deletePatent(id) {
  */
 async function batchDelete() {
     const checked = document.querySelectorAll('.patent-checkbox:checked');
-    if (checked.length === 0) { alert('请先勾选要删除的专利'); return; }
-    if (!confirm(`确认将选中的 ${checked.length} 条专利移入回收站？`)) return;
+    if (checked.length === 0) { await showAlertModal('请先勾选要删除的专利'); return; }
+    if (!await showConfirmModal(`确认将选中的 ${checked.length} 条专利移入回收站？`)) return;
     const ids = Array.from(checked).map(cb => parseInt(cb.value));
     try {
         for (const id of ids) {
@@ -678,7 +761,7 @@ async function batchDelete() {
         document.getElementById('checkAll').checked = false;
         loadPatentList();
     } catch (err) {
-        alert('批量删除失败：' + err.message);
+        await showAlertModal('批量删除失败：' + err.message);
     }
 }
 
@@ -688,7 +771,7 @@ async function batchDelete() {
  */
 async function batchCompleteTask() {
     const checked = document.querySelectorAll('.patent-checkbox:checked');
-    if (checked.length === 0) { alert('请先勾选专利'); return; }
+    if (checked.length === 0) { await showAlertModal('请先勾选专利'); return; }
     const ids = Array.from(checked).map(cb => parseInt(cb.value));
 
     try {
@@ -722,7 +805,7 @@ async function batchCompleteTask() {
         document.getElementById('taskModal').dataset.patentId = '';
         document.getElementById('taskModal').classList.remove('hidden');
     } catch (err) {
-        alert('加载待办数据失败：' + err.message);
+        await showAlertModal('加载待办数据失败：' + err.message);
     }
 }
 
@@ -757,7 +840,7 @@ async function completeTask(patentId) {
         document.getElementById('taskModal').dataset.patentId = patentId;
         document.getElementById('taskModal').classList.remove('hidden');
     } catch (err) {
-        alert('加载待办数据失败：' + err.message);
+        await showAlertModal('加载待办数据失败：' + err.message);
     }
 }
 
@@ -768,10 +851,10 @@ async function completeTask(patentId) {
 async function confirmTasksComplete() {
     const checked = document.querySelectorAll('.task-checkbox:checked');
     if (checked.length === 0) {
-        alert('请至少选择一项待办事项');
+        await showAlertModal('请至少选择一项待办事项');
         return;
     }
-    if (!confirm(`确认完成选中的 ${checked.length} 项待办？`)) return;
+    if (!await showConfirmModal(`确认完成选中的 ${checked.length} 项待办？`)) return;
 
     try {
         const ids = Array.from(checked).map(cb => parseInt(cb.value));
@@ -801,13 +884,13 @@ async function confirmTasksComplete() {
             await generateNextTasks(parseInt(pidStr), patentActions[pidStr]);
         }
 
-        alert(`已完成 ${ids.length} 项待办`);
+        await showAlertModal(`已完成 ${ids.length} 项待办`);
         document.getElementById('taskModal').classList.add('hidden');
         // 备份数据库
         await window.patentAPI.backupDatabase().catch(() => {});
         loadPatentList();
     } catch (err) {
-        alert('操作失败：' + err.message);
+        await showAlertModal('操作失败：' + err.message);
     }
 }
 
@@ -887,7 +970,7 @@ async function showPatentDetail(id) {
         const patents = await window.patentAPI.dbQuery(
             "SELECT * FROM patents WHERE id = ?", [id]
         );
-        if (patents.length === 0) { alert('未找到专利信息'); return; }
+        if (patents.length === 0) { await showAlertModal('未找到专利信息'); return; }
         const p = patents[0];
 
         // 显示浮层
@@ -918,7 +1001,7 @@ async function showPatentDetail(id) {
 
         exitEditMode();
     } catch (err) {
-        alert('加载详情失败：' + err.message);
+        await showAlertModal('加载详情失败：' + err.message);
     }
 }
 
@@ -1158,13 +1241,13 @@ async function savePatentEdit() {
         data[el.dataset.key] = el.value;
     });
     if (!data.patent_no || !data.patent_name) {
-        alert('专利号和专利名称为必填项');
+        await showAlertModal('专利号和专利名称为必填项');
         return;
     }
     // 校验专利号格式
     const noCheck = validatePatentNo(data.patent_no);
     if (!noCheck.valid) {
-        alert('专利号格式错误：' + noCheck.message);
+        await showAlertModal('专利号格式错误：' + noCheck.message);
         return;
     }
     try {
@@ -1181,11 +1264,11 @@ async function savePatentEdit() {
             "INSERT INTO operation_logs (patent_id, action_type, description) VALUES (?, '编辑', '修改专利基本信息')",
             [currentDetailPatentId]
         );
-        alert('保存成功');
+        await showAlertModal('保存成功');
         // 刷新详情
         showPatentDetail(currentDetailPatentId);
     } catch (err) {
-        alert('保存失败：' + err.message);
+        await showAlertModal('保存失败：' + err.message);
     }
 }
 
@@ -1195,15 +1278,15 @@ async function savePatentEdit() {
  */
 async function deleteCurrentPatent() {
     if (!currentDetailPatentId) return;
-    if (!confirm('确认将该专利移入回收站？')) return;
+    if (!await showConfirmModal('确认将该专利移入回收站？')) return;
     try {
         await window.patentAPI.dbRun(
             "UPDATE patents SET is_deleted = 1, deleted_at = datetime('now','localtime'), updated_at = datetime('now','localtime') WHERE id = ?",
             [currentDetailPatentId]
         );
-        alert('已移入回收站');
+        await showAlertModal('已移入回收站');
         hidePatentDetail();
     } catch (err) {
-        alert('操作失败：' + err.message);
+        await showAlertModal('操作失败：' + err.message);
     }
 }

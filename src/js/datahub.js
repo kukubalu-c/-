@@ -80,7 +80,7 @@ async function exportToExcel() {
     // 第1步：获取选中的字段
     const checked = document.querySelectorAll('.export-field:checked');
     if (checked.length === 0) {
-        alert('请至少选择一个导出字段');
+        await showAlertModal('请至少选择一个导出字段');
         return;
     }
 
@@ -98,7 +98,7 @@ async function exportToExcel() {
     );
 
     if (patents.length === 0) {
-        alert('没有可导出的数据');
+        await showAlertModal('没有可导出的数据');
         return;
     }
 
@@ -280,7 +280,7 @@ function handleFileSelect(event) {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = function (e) {
+    reader.onload = async function (e) {
         try {
             const data = new Uint8Array(e.target.result);
             const workbook = XLSX.read(data, { type: 'array' });
@@ -288,7 +288,7 @@ function handleFileSelect(event) {
             const jsonData = XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
 
             if (jsonData.length === 0) {
-                alert('文件中没有数据');
+                await showAlertModal('文件中没有数据');
                 return;
             }
 
@@ -297,7 +297,7 @@ function handleFileSelect(event) {
             importData = parsed.valid;
             showImportPreview(parsed);
         } catch (err) {
-            alert('文件解析失败：' + err.message);
+            await showAlertModal('文件解析失败：' + err.message);
         }
     };
     reader.readAsArrayBuffer(file);
@@ -420,7 +420,7 @@ function showImportPreview(parsed) {
  */
 async function confirmImport() {
     if (importData.length === 0) {
-        alert('没有可导入的数据');
+        await showAlertModal('没有可导入的数据');
         return;
     }
 
@@ -450,7 +450,7 @@ async function confirmImport() {
     }
 
     if (newData.length === 0) {
-        alert('没有需要导入的数据');
+        await showAlertModal('没有需要导入的数据');
         return;
     }
 
@@ -482,7 +482,7 @@ async function confirmImport() {
         }
     }
 
-    alert(`导入完成！成功 ${successCount} 条` + (newData.length - successCount > 0 ? `，失败 ${newData.length - successCount} 条` : ''));
+    await showAlertModal(`导入完成！成功 ${successCount} 条` + (newData.length - successCount > 0 ? `，失败 ${newData.length - successCount} 条` : ''));
     document.getElementById('importPreview').classList.add('hidden');
     document.getElementById('fileInput').value = '';
     importData = [];
