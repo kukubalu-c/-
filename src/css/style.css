@@ -462,14 +462,17 @@ body {
     align-items: center;
     justify-content: center;
     z-index: 1000;
+    overflow-y: auto;
+    padding: 40px;
 }
 .modal {
     background: #fff;
     border-radius: 12px;
     padding: 32px;
     width: 480px;
-    max-width: 90%;
+    max-width: 100%;
     box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+    margin: auto;
 }
 .modal h4 { font-size: 16px; margin-bottom: 16px; }
 .dup-list {
@@ -951,7 +954,7 @@ body {
 /* ============================================ */
 .modal-lg {
     width: 680px;
-    max-width: 90%;
+    max-width: 100%;
 }
 .detail-header {
     display: flex;
@@ -1049,4 +1052,280 @@ body {
     font-size: 13px;
     font-weight: 500;
     color: #f5222d;
+}
+
+/* ============================================ */
+/* 专利详情页（右侧抽屉） */
+/* ============================================ */
+#patentDetailContainer {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 1000;
+    display: flex;
+    justify-content: flex-end;
+}
+.pd-backdrop {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.4);
+    cursor: pointer;
+}
+.pd-modal {
+    position: relative;
+    width: 45%;
+    max-width: 620px;
+    height: 100vh;
+    background: #f0f2f5;
+    box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+    display: flex;
+    flex-direction: column;
+    padding: 20px 24px 0 24px;
+}
+.pd-close {
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    width: 30px;
+    height: 30px;
+    border: none;
+    background: transparent;
+    font-size: 24px;
+    color: #999;
+    cursor: pointer;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    line-height: 1;
+}
+.pd-close:hover {
+    background: #f5f5f5;
+    color: #333;
+}
+.pd-title-row {
+    margin-bottom: 6px;
+    padding-right: 32px;
+}
+.pd-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #1a1a1a;
+    line-height: 1.4;
+}
+.pd-subtitle {
+    font-size: 13px;
+    color: #666;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e8e8e8;
+}
+.pd-sep {
+    color: #d9d9d9;
+    font-size: 11px;
+}
+/* 滚动内容区 */
+.pd-scroll-area {
+    flex: 1;
+    overflow-y: auto;
+    margin: 0 -24px;
+    padding: 0 24px;
+}
+/* 底部操作栏 */
+.pd-bottom-actions {
+    display: flex;
+    gap: 8px;
+    padding: 12px 0;
+    border-top: 1px solid #e8e8e8;
+    flex-shrink: 0;
+}
+
+/* 选择栏 */
+.pd-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 20px;
+    background: #fff;
+    border-radius: 8px;
+    padding: 4px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+}
+.pd-tab {
+    flex: 1;
+    padding: 10px 0;
+    border: none;
+    background: transparent;
+    font-size: 14px;
+    color: #666;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.2s;
+    text-align: center;
+}
+.pd-tab:hover { color: #1890ff; background: rgba(24,144,255,0.04); }
+.pd-tab.active { color: #fff; background: #1890ff; font-weight: 500; }
+
+/* 标签内容 */
+.pd-tab-content { display: none; }
+.pd-tab-content.active { display: block; }
+
+/* 基本信息网格（查看模式） */
+.pd-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px 32px;
+    background: #fff;
+    border-radius: 8px;
+    padding: 24px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+}
+.pd-grid .pd-field {
+    display: flex;
+    flex-direction: column;
+}
+.pd-grid .pd-field-label {
+    font-size: 12px;
+    color: #999;
+    margin-bottom: 4px;
+}
+.pd-grid .pd-field-value {
+    font-size: 14px;
+    color: #333;
+    word-break: break-all;
+}
+.pd-grid .pd-field-full {
+    grid-column: 1 / -1;
+}
+
+/* 基本信息网格（编辑模式） */
+.pd-edit-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px 32px;
+    background: #fff;
+    border-radius: 8px;
+    padding: 24px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+}
+.pd-edit-grid .pd-edit-field {
+    display: flex;
+    flex-direction: column;
+}
+.pd-edit-grid .pd-edit-field label {
+    font-size: 12px;
+    color: #999;
+    margin-bottom: 4px;
+}
+.pd-edit-grid .pd-edit-field input,
+.pd-edit-grid .pd-edit-field select {
+    padding: 8px 10px;
+    border: 1px solid #d9d9d9;
+    border-radius: 6px;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+.pd-edit-grid .pd-edit-field input:focus,
+.pd-edit-grid .pd-edit-field select:focus {
+    border-color: #1890ff;
+    box-shadow: 0 0 0 2px rgba(24,144,255,0.1);
+}
+.pd-edit-grid .pd-edit-field-full {
+    grid-column: 1 / -1;
+}
+.pd-edit-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 16px;
+}
+
+/* 状态流 */
+.pd-flow-container {
+    background: #fff;
+    border-radius: 8px;
+    padding: 16px 12px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+    overflow-x: auto;
+}
+.pd-flow-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    min-width: max-content;
+    padding: 0 8px;
+}
+.pd-flow-node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+.pd-flow-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid;
+    flex-shrink: 0;
+    transition: all 0.3s;
+}
+.pd-flow-dot.active {
+    background: #1890ff;
+    border-color: #1890ff;
+    box-shadow: 0 0 6px rgba(24,144,255,0.3);
+}
+.pd-flow-dot.inactive {
+    background: #fff;
+    border-color: #d9d9d9;
+}
+.pd-flow-dot.terminated {
+    background: #f5222d;
+    border-color: #f5222d;
+    box-shadow: 0 0 6px rgba(245,34,45,0.3);
+}
+.pd-flow-label {
+    font-size: 10px;
+    color: #999;
+    white-space: nowrap;
+    text-align: center;
+}
+.pd-flow-label.active-label {
+    color: #1890ff;
+    font-weight: 500;
+}
+.pd-flow-label.terminated-label {
+    color: #f5222d;
+    font-weight: 500;
+}
+.pd-flow-line {
+    width: 20px;
+    height: 2px;
+    background: #d9d9d9;
+    flex-shrink: 0;
+    margin-top: 6px;
+}
+.pd-flow-line.active-line {
+    background: #1890ff;
+}
+
+/* 缴费记录 & 操作日志表格卡片样式 */
+#pdTabFee .import-table,
+#pdTabLog .import-table {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+}
+#pdTabFee .import-table thead th,
+#pdTabLog .import-table thead th {
+    background: #fafafa;
+}
+#pdTabFee .import-table tbody td,
+#pdTabLog .import-table tbody td {
+    padding: 10px 12px;
 }

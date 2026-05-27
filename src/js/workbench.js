@@ -267,12 +267,25 @@ function initWorkbenchList() {
     document.getElementById('checkAll').addEventListener('change', function () {
         document.querySelectorAll('.patent-checkbox').forEach(cb => cb.checked = this.checked);
     });
-    // 关闭详情弹窗
-    document.getElementById('detailClose').addEventListener('click', () => {
-        document.getElementById('detailModal').classList.add('hidden');
+    // 专利详情页 - 关闭浮层
+    document.getElementById('btnCloseDetail').addEventListener('click', hidePatentDetail);
+    document.querySelector('#patentDetailContainer .pd-backdrop').addEventListener('click', hidePatentDetail);
+    // 专利详情页 - 编辑/删除
+    document.getElementById('btnDetailEdit').addEventListener('click', enterEditMode);
+    document.getElementById('btnDetailDelete').addEventListener('click', deleteCurrentPatent);
+    // 专利详情页 - 保存/取消编辑
+    document.getElementById('btnSaveEdit').addEventListener('click', savePatentEdit);
+    document.getElementById('btnCancelEdit').addEventListener('click', () => {
+        if (confirm('放弃编辑？')) exitEditMode();
     });
-    document.getElementById('detailCloseBtn').addEventListener('click', () => {
-        document.getElementById('detailModal').classList.add('hidden');
+    // 专利详情页 - 标签切换
+    document.querySelectorAll('.pd-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.pd-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            document.querySelectorAll('.pd-tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById('pdTab' + tab.dataset.pdtab.charAt(0).toUpperCase() + tab.dataset.pdtab.slice(1)).classList.add('active');
+        });
     });
     // 关闭待办弹窗
     document.getElementById('taskModalClose').addEventListener('click', () => {
@@ -389,7 +402,7 @@ async function loadPatentList() {
             row.addEventListener('click', (e) => {
                 if (e.target.closest('.col-actions')) return;
                 if (e.target.closest('.col-checkbox')) return;
-                showDetailModal(parseInt(row.dataset.id));
+                showPatentDetail(parseInt(row.dataset.id));
             });
         });
 
@@ -863,93 +876,334 @@ async function generateNextTasks(patentId, completedActions) {
 }
 
 /**
- * 函数名：showDetailModal
- * 作用：弹窗显示专利详情、缴费记录、操作日志
+ * 函数名：showPatentDetail
+ * 作用：在工作台内打开专利详情页（页面视图）
  */
-async function showDetailModal(id) {
+let currentDetailPatentId = null;
+
+async function showPatentDetail(id) {
+    currentDetailPatentId = id;
     try {
-        // 查询专利信息
         const patents = await window.patentAPI.dbQuery(
-            "SELECT * FROM patents WHERE id = ?",
-            [id]
+            "SELECT * FROM patents WHERE id = ?", [id]
         );
-        if (patents.length === 0) {
-            alert('未找到专利信息');
-            return;
-        }
+        if (patents.length === 0) { alert('未找到专利信息'); return; }
         const p = patents[0];
 
-        // 设置标题
-        document.getElementById('detailTitle').textContent = `专利详情 - ${p.patent_no}`;
+        // 显示浮层
+        document.getElementById('patentDetailContainer').classList.remove('hidden');
 
-        // 渲染信息网格
-        const fields = [
-            { label: '专利号', value: p.patent_no },
-            { label: '专利名称', value: p.patent_name },
-            { label: '专利类型', value: p.patent_type },
-            { label: '发明人', value: p.inventor || '-' },
-            { label: '申请人', value: p.applicant || '-' },
-            { label: '申请日期', value: p.apply_date || '-' },
-            { label: '授权公告日', value: p.authorize_date || '-' },
-            { label: '权利状态', value: renderStatusTag(p.status) },
-            { label: '费减比例', value: p.fee_reduction || '无' },
-            { label: '备注', value: p.notes || '-' },
-            { label: '创建时间', value: p.created_at || '-' },
-            { label: '更新时间', value: p.updated_at || '-' }
-        ];
-        let gridHtml = '';
-        fields.forEach(f => {
-            gridHtml += `<div class="detail-item"><span class="label">${f.label}</span><span class="value">${f.value}</span></div>`;
-        });
-        document.getElementById('detailGrid').innerHTML = gridHtml;
+        // 渲染标题区
+        document.getElementById('pdTitle').textContent = p.patent_name;
+        const subtitleEl = document.getElementById('pdSubtitle');
+        subtitleEl.innerHTML = `
+            <span>${escapeHtml(p.patent_no)}</span>
+            <span class="pd-sep">|</span>
+            <span>${escapeHtml(p.patent_type || '-')}</span>
+            <span class="pd-sep">|</span>
+            ${renderStatusTag(p.status)}
+        `;
 
-        // 查询缴费记录
-        const fees = await window.patentAPI.dbQuery(
-            "SELECT fee_type, year_index, amount, paid_amount, due_date, paid_date, status FROM fee_tasks WHERE patent_id = ? ORDER BY due_date ASC",
-            [id]
-        );
-        const feeBody = document.getElementById('detailFeeBody');
-        if (fees.length === 0) {
-            feeBody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">暂无记录</td></tr>';
-        } else {
-            let feeHtml = '';
-            fees.forEach(t => {
-                const yearLabel = t.year_index ? `第${t.year_index}年` : '-';
-                const statusTag = t.status === '已缴费'
-                    ? '<span class="status-tag status-tag-green">已缴费</span>'
-                    : t.status === '已失效'
-                    ? '<span class="status-tag status-tag-gray">已失效</span>'
-                    : '<span class="status-tag status-tag-red">待缴费</span>';
-                feeHtml += `<tr>
-                    <td>${escapeHtml(t.fee_type)}</td>
-                    <td>${yearLabel}</td>
-                    <td>¥${t.amount}</td>
-                    <td>¥${t.paid_amount || 0}</td>
-                    <td>${t.due_date || '-'}</td>
-                    <td>${statusTag}</td>
-                </tr>`;
-            });
-            feeBody.innerHTML = feeHtml;
-        }
+        // 渲染各标签页
+        renderDetailInfo(p);
+        renderDetailFlow(p);
+        renderDetailFees(id);
+        renderDetailLogs(id);
 
-        // 查询操作日志
-        const logs = await window.patentAPI.dbQuery(
-            "SELECT action_type, description, created_at FROM operation_logs WHERE patent_id = ? ORDER BY created_at DESC LIMIT 50",
-            [id]
-        );
-        const logBody = document.getElementById('detailLogBody');
-        if (logs.length === 0) {
-            logBody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">暂无记录</td></tr>';
-        } else {
-            let logHtml = '';
-            logs.forEach(l => {
-                logHtml += `<tr><td>${escapeHtml(l.action_type)}</td><td>${escapeHtml(l.description || '-')}</td><td>${l.created_at || '-'}</td></tr>`;
-            });
-            logBody.innerHTML = logHtml;
-        }
+        // 默认激活基本信息标签
+        document.querySelectorAll('.pd-tab').forEach(t => t.classList.remove('active'));
+        document.querySelector('.pd-tab[data-pdtab="info"]').classList.add('active');
+        document.querySelectorAll('.pd-tab-content').forEach(c => c.classList.remove('active'));
+        document.getElementById('pdTabInfo').classList.add('active');
 
-        document.getElementById('detailModal').classList.remove('hidden');
+        exitEditMode();
     } catch (err) {
         alert('加载详情失败：' + err.message);
+    }
+}
+
+/**
+ * 函数名：hidePatentDetail
+ * 作用：关闭专利详情浮层
+ */
+function hidePatentDetail() {
+    document.getElementById('patentDetailContainer').classList.add('hidden');
+    currentDetailPatentId = null;
+}
+
+/**
+ * 函数名：renderDetailInfo
+ * 作用：渲染基本信息网格
+ */
+function renderDetailInfo(p) {
+    const feeLabels = {
+        '无': '无（全额）',
+        '个人': '个人（85%费减）',
+        '小微企业': '小微企业（85%费减）',
+        '普通企业': '普通企业（70%费减）',
+        '事业高校': '事业高校（100%费减）',
+    };
+    const fields = [
+        { label: '申请日', key: 'apply_date', full: false },
+        { label: '授权公告日', key: 'authorize_date', full: false },
+        { label: '权利状态', key: 'status', full: false, html: true },
+        { label: '费减比例', key: 'fee_reduction', full: false, fmt: v => feeLabels[v] || v },
+        { label: '发明人', key: 'inventor', full: false },
+        { label: '申请人', key: 'applicant', full: false },
+        { label: '申请至今', key: null, full: false, computed: p.apply_date ? `${daysSince(p.apply_date)}天` : '-' },
+        { label: '备注', key: 'notes', full: true },
+    ];
+    let html = '';
+    fields.forEach(f => {
+        let value;
+        if (f.computed) {
+            value = f.computed;
+        } else if (f.html) {
+            value = renderStatusTag(p[f.key]);
+        } else if (f.fmt) {
+            value = escapeHtml(f.fmt(p[f.key]));
+        } else {
+            value = escapeHtml(p[f.key] || '-');
+        }
+        html += `<div class="pd-field ${f.full ? 'pd-field-full' : ''}">
+            <span class="pd-field-label">${f.label}</span>
+            <span class="pd-field-value">${value}</span>
+        </div>`;
+    });
+    document.getElementById('pdGrid').innerHTML = html;
+}
+
+function daysSince(dateStr) {
+    if (!dateStr) return 0;
+    const d = new Date(dateStr);
+    const now = new Date();
+    return Math.floor((now - d) / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * 函数名：renderDetailFlow
+ * 作用：渲染状态流（水平管道图）
+ */
+function renderDetailFlow(p) {
+    const FLOW = ['撰写中', '已申请', '形式审查中', '实质审查中', 'OA答复中', '通知授权', '专利权生效', '已终止'];
+    const currentIdx = FLOW.indexOf(p.status);
+    const isTerminal = ['已驳回', '已撤回', '已终止'].includes(p.status);
+    const currentFlowIdx = isTerminal ? FLOW.length - 1 : currentIdx;
+
+    let html = '<div class="pd-flow-row">';
+    FLOW.forEach((state, i) => {
+        let dotClass = 'inactive';
+        let labelClass = '';
+        if (isTerminal && i === FLOW.length - 1) {
+            dotClass = 'terminated';
+            labelClass = 'terminated-label';
+        } else if (i <= currentFlowIdx && currentFlowIdx >= 0) {
+            dotClass = 'active';
+            labelClass = 'active-label';
+        }
+        // 当前状态高亮
+        if (i === currentIdx) labelClass = 'active-label';
+        // 终态节点文字显示实际状态
+        const label = (isTerminal && i === FLOW.length - 1) ? p.status : state;
+
+        html += `<div class="pd-flow-node">
+            <div class="pd-flow-dot ${dotClass}"></div>
+            <span class="pd-flow-label ${labelClass}">${label}</span>
+        </div>`;
+        if (i < FLOW.length - 1) {
+            const lineClass = (i < currentFlowIdx && currentFlowIdx >= 0) ? 'active-line' : '';
+            html += `<div class="pd-flow-line ${lineClass}"></div>`;
+        }
+    });
+    html += '</div>';
+    document.getElementById('pdFlowContainer').innerHTML = html;
+}
+
+/**
+ * 函数名：renderDetailFees
+ * 作用：渲染缴费记录表格
+ */
+async function renderDetailFees(id) {
+    const fees = await window.patentAPI.dbQuery(
+        "SELECT fee_type, year_index, amount, due_date, paid_date, status FROM fee_tasks WHERE patent_id = ? ORDER BY due_date ASC",
+        [id]
+    );
+    const body = document.getElementById('pdFeeBody');
+    if (fees.length === 0) {
+        body.innerHTML = '<tr><td colspan="6" class="text-center text-muted">暂无记录</td></tr>';
+        return;
+    }
+    let html = '';
+    fees.forEach(t => {
+        const yearLabel = t.year_index ? `第${t.year_index}年` : '-';
+        const statusTag = t.status === '已缴费'
+            ? '<span class="status-tag status-tag-green">已缴费</span>'
+            : t.status === '已失效'
+            ? '<span class="status-tag status-tag-gray">已失效</span>'
+            : '<span class="status-tag status-tag-red">待缴费</span>';
+        html += `<tr>
+            <td>${escapeHtml(t.fee_type)}</td>
+            <td>${yearLabel}</td>
+            <td>${t.due_date || '-'}</td>
+            <td>${t.paid_date || '-'}</td>
+            <td>¥${t.amount}</td>
+            <td>${statusTag}</td>
+        </tr>`;
+    });
+    body.innerHTML = html;
+}
+
+/**
+ * 函数名：renderDetailLogs
+ * 作用：渲染操作日志表格
+ */
+async function renderDetailLogs(id) {
+    const logs = await window.patentAPI.dbQuery(
+        "SELECT action_type, description, created_at FROM operation_logs WHERE patent_id = ? ORDER BY created_at DESC LIMIT 50",
+        [id]
+    );
+    const body = document.getElementById('pdLogBody');
+    if (logs.length === 0) {
+        body.innerHTML = '<tr><td colspan="3" class="text-center text-muted">暂无记录</td></tr>';
+        return;
+    }
+    let html = '';
+    logs.forEach(l => {
+        html += `<tr><td>${escapeHtml(l.action_type)}</td><td>${escapeHtml(l.description || '-')}</td><td>${l.created_at || '-'}</td></tr>`;
+    });
+    body.innerHTML = html;
+}
+
+// ============================================
+// 编辑 & 删除功能
+// ============================================
+
+/**
+ * 函数名：enterEditMode
+ * 作用：切换基本信息到编辑模式
+ */
+function enterEditMode() {
+    const editGrid = document.getElementById('pdEditGrid');
+    const viewGrid = document.getElementById('pdGrid');
+    const actions = document.getElementById('pdEditActions');
+
+    // 获取当前专利数据
+    const patentEl = document.getElementById('pdTitle');
+    const patentName = patentEl.textContent;
+
+    // 从 subtitle 和 DB 获取数据
+    window.patentAPI.dbQuery("SELECT * FROM patents WHERE id = ?", [currentDetailPatentId]).then(patents => {
+        if (patents.length === 0) return;
+        const p = patents[0];
+
+        const fields = [
+            { label: '专利号/申请号', key: 'patent_no', type: 'text' },
+            { label: '专利名称', key: 'patent_name', type: 'text' },
+            { label: '专利类型', key: 'patent_type', type: 'select', options: ['发明', '实用新型', '外观设计'] },
+            { label: '发明人', key: 'inventor', type: 'text' },
+            { label: '申请人', key: 'applicant', type: 'text' },
+            { label: '申请日期', key: 'apply_date', type: 'date' },
+            { label: '授权公告日', key: 'authorize_date', type: 'date' },
+            { label: '权利状态', key: 'status', type: 'select', options: ['撰写中', '已申请', '形式审查中', '实质审查中', 'OA答复中', '通知授权', '专利权生效', '已驳回', '已撤回', '已终止'] },
+            { label: '费减比例', key: 'fee_reduction', type: 'select', options: ['无', '个人', '小微企业', '普通企业', '事业高校'] },
+            { label: '备注', key: 'notes', type: 'text', full: true },
+        ];
+
+        let html = '';
+        fields.forEach(f => {
+            const val = p[f.key] || '';
+            const fullClass = f.full ? ' pd-edit-field-full' : '';
+            if (f.type === 'select') {
+                const opts = f.options.map(o =>
+                    `<option value="${o}"${o === val ? ' selected' : ''}>${o}</option>`
+                ).join('');
+                html += `<div class="pd-edit-field${fullClass}">
+                    <label>${f.label}</label>
+                    <select data-key="${f.key}">${opts}</select>
+                </div>`;
+            } else {
+                html += `<div class="pd-edit-field${fullClass}">
+                    <label>${f.label}</label>
+                    <input type="${f.type}" value="${escapeHtml(val)}" data-key="${f.key}">
+                </div>`;
+            }
+        });
+        editGrid.innerHTML = html;
+
+        viewGrid.classList.add('hidden');
+        editGrid.classList.remove('hidden');
+        actions.classList.remove('hidden');
+    });
+}
+
+/**
+ * 函数名：exitEditMode
+ * 作用：退出编辑模式回到查看模式
+ */
+function exitEditMode() {
+    document.getElementById('pdEditGrid').classList.add('hidden');
+    document.getElementById('pdEditActions').classList.add('hidden');
+    document.getElementById('pdGrid').classList.remove('hidden');
+}
+
+/**
+ * 函数名：savePatentEdit
+ * 作用：保存编辑后的专利信息
+ */
+async function savePatentEdit() {
+    const editGrid = document.getElementById('pdEditGrid');
+    const inputs = editGrid.querySelectorAll('input[data-key], select[data-key]');
+    const data = {};
+    inputs.forEach(el => {
+        data[el.dataset.key] = el.value;
+    });
+    if (!data.patent_no || !data.patent_name) {
+        alert('专利号和专利名称为必填项');
+        return;
+    }
+    // 校验专利号格式
+    const noCheck = validatePatentNo(data.patent_no);
+    if (!noCheck.valid) {
+        alert('专利号格式错误：' + noCheck.message);
+        return;
+    }
+    try {
+        await window.patentAPI.dbRun(
+            `UPDATE patents SET patent_no=?, patent_name=?, patent_type=?, inventor=?, applicant=?,
+             apply_date=?, authorize_date=?, status=?, fee_reduction=?, notes=?,
+             updated_at=datetime('now','localtime') WHERE id=?`,
+            [data.patent_no, data.patent_name, data.patent_type || '', data.inventor || '',
+             data.applicant || '', data.apply_date || null, data.authorize_date || null,
+             data.status || '撰写中', data.fee_reduction || '无', data.notes || '',
+             currentDetailPatentId]
+        );
+        await window.patentAPI.dbRun(
+            "INSERT INTO operation_logs (patent_id, action_type, description) VALUES (?, '编辑', '修改专利基本信息')",
+            [currentDetailPatentId]
+        );
+        alert('保存成功');
+        // 刷新详情
+        showPatentDetail(currentDetailPatentId);
+    } catch (err) {
+        alert('保存失败：' + err.message);
+    }
+}
+
+/**
+ * 函数名：deleteCurrentPatent
+ * 作用：将当前专利移入回收站
+ */
+async function deleteCurrentPatent() {
+    if (!currentDetailPatentId) return;
+    if (!confirm('确认将该专利移入回收站？')) return;
+    try {
+        await window.patentAPI.dbRun(
+            "UPDATE patents SET is_deleted = 1, deleted_at = datetime('now','localtime'), updated_at = datetime('now','localtime') WHERE id = ?",
+            [currentDetailPatentId]
+        );
+        alert('已移入回收站');
+        hidePatentDetail();
+    } catch (err) {
+        alert('操作失败：' + err.message);
     }
 }

@@ -389,30 +389,54 @@
             </main>
         </div>
 
-        <!-- 专利详情弹窗 -->
-        <div class="modal-overlay hidden" id="detailModal">
-            <div class="modal modal-lg">
-                <div class="detail-header">
-                    <h3 id="detailTitle">专利详情</h3>
-                    <button class="detail-close" id="detailClose">&times;</button>
+        <!-- 专利详情浮层（右侧抽屉） -->
+        <div id="patentDetailContainer" class="hidden">
+            <div class="pd-backdrop"></div>
+            <div class="pd-modal">
+                <button class="pd-close" id="btnCloseDetail">&times;</button>
+
+                <div class="pd-title-row">
+                    <h1 class="pd-title" id="pdTitle">专利名称</h1>
                 </div>
-                <div class="detail-grid" id="detailGrid"></div>
-                <h4 class="detail-section-title">缴费记录</h4>
-                <div class="detail-table-wrap" id="detailFeeWrap">
-                    <table class="import-table">
-                        <thead><tr><th>费用类型</th><th>年份</th><th>应缴金额</th><th>实缴金额</th><th>截止日期</th><th>状态</th></tr></thead>
-                        <tbody id="detailFeeBody"><tr><td colspan="6" class="text-center text-muted">暂无记录</td></tr></tbody>
-                    </table>
+                <div class="pd-subtitle" id="pdSubtitle"></div>
+
+                <div class="pd-tabs">
+                    <button class="pd-tab active" data-pdtab="info">基本信息</button>
+                    <button class="pd-tab" data-pdtab="fee">缴费记录</button>
+                    <button class="pd-tab" data-pdtab="log">操作日志</button>
                 </div>
-                <h4 class="detail-section-title">操作日志</h4>
-                <div class="detail-table-wrap" id="detailLogWrap">
-                    <table class="import-table">
-                        <thead><tr><th>操作</th><th>详情</th><th>时间</th></tr></thead>
-                        <tbody id="detailLogBody"><tr><td colspan="3" class="text-center text-muted">暂无记录</td></tr></tbody>
-                    </table>
+
+                <div class="pd-scroll-area">
+                    <div class="pd-tab-content active" id="pdTabInfo">
+                        <div class="pd-grid" id="pdGrid"></div>
+                        <div class="pd-flow-container" id="pdFlowContainer"></div>
+                        <div class="pd-edit-grid hidden" id="pdEditGrid"></div>
+                        <div class="pd-edit-actions hidden" id="pdEditActions">
+                            <button class="btn btn-primary" id="btnSaveEdit">保存</button>
+                            <button class="btn btn-default" id="btnCancelEdit">取消</button>
+                        </div>
+                    </div>
+                    <div class="pd-tab-content" id="pdTabFee">
+                        <table class="import-table">
+                            <thead><tr>
+                                <th>费用类型</th><th>年度</th><th>截止日</th><th>缴费日</th><th>金额/元</th><th>状态</th>
+                            </tr></thead>
+                            <tbody id="pdFeeBody"><tr><td colspan="6" class="text-center text-muted">暂无记录</td></tr></tbody>
+                        </table>
+                    </div>
+                    <div class="pd-tab-content" id="pdTabLog">
+                        <table class="import-table">
+                            <thead><tr>
+                                <th>日期</th><th>操作</th><th>详情</th>
+                            </tr></thead>
+                            <tbody id="pdLogBody"><tr><td colspan="3" class="text-center text-muted">暂无记录</td></tr></tbody>
+                        </table>
+                    </div>
                 </div>
-                <div class="modal-actions">
-                    <button class="btn btn-default" id="detailCloseBtn">关闭</button>
+
+                <div class="pd-bottom-actions">
+                    <button class="btn btn-default btn-sm" id="btnDetailEdit">✏️ 编辑</button>
+                    <button class="btn btn-default btn-sm" id="btnDetailDelete" style="color:#f5222d;border-color:#f5222d;">🗑 删除</button>
                 </div>
             </div>
         </div>
