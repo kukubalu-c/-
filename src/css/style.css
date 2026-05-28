@@ -1245,6 +1245,8 @@ body {
     font-size: 13px;
     outline: none;
     transition: border-color 0.2s;
+    width: 100%;
+    box-sizing: border-box;
 }
 .pd-edit-grid .pd-edit-field input:focus,
 .pd-edit-grid .pd-edit-field select:focus {
@@ -1253,6 +1255,20 @@ body {
 }
 .pd-edit-grid .pd-edit-field-full {
     grid-column: 1 / -1;
+}
+.pd-edit-section-header {
+    grid-column: 1 / -1;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1890ff;
+    border-bottom: 1px solid #e8e8e8;
+    padding-bottom: 6px;
+    margin-top: 8px;
+}
+@media (max-width: 768px) {
+    .pd-edit-grid {
+        grid-template-columns: 1fr;
+    }
 }
 .pd-edit-actions {
     display: flex;

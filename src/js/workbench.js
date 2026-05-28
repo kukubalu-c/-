@@ -147,13 +147,17 @@ async function savePatent() {
 
     // 保存到数据库
     try {
-        await window.patentAPI.dbRun(
+        const result = await window.patentAPI.dbRun(
             `INSERT INTO patents (patent_no, patent_name, patent_type, inventor, applicant,
              apply_date, authorize_date, status, fee_reduction, notes)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [patentNo, patentName, patentType, inventor, applicant,
              applyDate || null, authorizeDate || null, status, feeReduction, notes]
         );
+        // 状态变更联动（新增专利时初始状态对应任务生成）
+        if (result && result.lastInsertRowid) {
+            await handleStatusChange(result.lastInsertRowid, status);
+        }
         showFormMsg('保存成功！', 'success');
         document.getElementById('patentForm').reset();
         // 保存成功后关闭弹窗
@@ -218,6 +222,132 @@ function calculateFeeDueDate(applyDate, yearIndex) {
     const d = new Date(applyDate);
     const due = new Date(d.getFullYear() + yearIndex, d.getMonth(), d.getDate());
     return due.toISOString().slice(0, 10);
+}
+
+// ============================================
+// 其他费用标准（申请费、公布印刷费、授权登记费）
+// ============================================
+const OTHER_FEE_STANDARDS = {
+    '申请费': { '发明': 900, '实用新型': 500, '外观设计': 500 },
+    '公布印刷费': { '发明': 50, '实用新型': 0, '外观设计': 0 },
+    '授权登记费': { '发明': 250, '实用新型': 200, '外观设计': 200 },
+    '实质审查费': { '发明': 2500 },
+};
+
+function getOtherFeeAmount(feeType, patentType) {
+    const standards = OTHER_FEE_STANDARDS[feeType];
+    if (!standards) return 0;
+    return standards[patentType] || 0;
+}
+
+function addMonths(dateStr, months) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    d.setMonth(d.getMonth() + months);
+    return d.toISOString().slice(0, 10);
+}
+
+/**
+ * 函数名：createFeeTaskIfNotExists
+ * 作用：创建费用任务（如已存在则跳过）
+ */
+async function createFeeTaskIfNotExists(patentId, feeType, yearIndex, amount, dueDate) {
+    const existing = await window.patentAPI.dbQuery(
+        "SELECT id FROM fee_tasks WHERE patent_id = ? AND fee_type = ? AND year_index IS ? AND status = '待缴费'",
+        [patentId, feeType, yearIndex || null]
+    );
+    if (existing.length > 0) return false;
+    await window.patentAPI.dbRun(
+        "INSERT INTO fee_tasks (patent_id, fee_type, year_index, amount, due_date, status) VALUES (?, ?, ?, ?, ?, '待缴费')",
+        [patentId, feeType, yearIndex || null, amount, dueDate]
+    );
+    return true;
+}
+
+/**
+ * 函数名：handleStatusChange
+ * 作用：状态变更联动——自动生成/取消费用任务
+ * 参数：
+ *   - patentId - number - 专利ID
+ *   - newStatus - string - 变更后的状态
+ * 返回值：Promise<void>
+ * 使用场景：专利状态变更时自动调用
+ */
+async function handleStatusChange(patentId, newStatus) {
+    const patents = await window.patentAPI.dbQuery("SELECT * FROM patents WHERE id = ?", [patentId]);
+    if (patents.length === 0) return;
+    const p = patents[0];
+
+    // 1) → 已申请: 生成申请费 + 公布印刷费
+    if (newStatus === '已申请' && p.apply_date) {
+        const dueDate = addMonths(p.apply_date, 2);
+        const feeAmt = getOtherFeeAmount('申请费', p.patent_type);
+        let created = false;
+        if (feeAmt > 0) {
+            const rate = getFeeReductionRate(p.fee_reduction);
+            const finalAmount = rate > 0 ? Math.round(feeAmt * rate) : feeAmt;
+            const ok = await createFeeTaskIfNotExists(patentId, '申请费', null, finalAmount, dueDate);
+            if (ok) created = true;
+        }
+        const pubAmt = getOtherFeeAmount('公布印刷费', p.patent_type);
+        if (pubAmt > 0) {
+            const ok = await createFeeTaskIfNotExists(patentId, '公布印刷费', null, pubAmt, dueDate);
+            if (ok) created = true;
+        }
+        if (created) {
+            await window.patentAPI.dbRun(
+                "INSERT INTO operation_logs (patent_id, action_type, description) VALUES (?, '任务生成', ?)",
+                [patentId, `状态变更为"已申请"，自动生成了申请费和公布印刷费任务`]
+            );
+        }
+    }
+
+    // 2) → 通知授权: 生成授权登记费
+    if (newStatus === '通知授权') {
+        const feeAmt = getOtherFeeAmount('授权登记费', p.patent_type);
+        if (feeAmt > 0) {
+            const rate = getFeeReductionRate(p.fee_reduction);
+            const finalAmount = rate > 0 ? Math.round(feeAmt * rate) : feeAmt;
+            const baseDate = p.authorize_date || new Date().toISOString().slice(0, 10);
+            const dueDate = addMonths(baseDate, 2);
+            const ok = await createFeeTaskIfNotExists(patentId, '授权登记费', null, finalAmount, dueDate);
+            if (ok) {
+                await window.patentAPI.dbRun(
+                    "INSERT INTO operation_logs (patent_id, action_type, description) VALUES (?, '任务生成', ?)",
+                    [patentId, `状态变更为"通知授权"，自动生成了授权登记费任务（¥${finalAmount}，截止${dueDate}）`]
+                );
+            }
+        }
+    }
+
+    // 3) → 终态（已终止/已驳回/已撤回）: 取消所有待缴费任务
+    if (['已终止', '已驳回', '已撤回'].includes(newStatus)) {
+        await window.patentAPI.dbRun(
+            "UPDATE fee_tasks SET status = '已失效' WHERE patent_id = ? AND status = '待缴费'",
+            [patentId]
+        );
+        await window.patentAPI.dbRun(
+            "INSERT INTO operation_logs (patent_id, action_type, description) VALUES (?, '状态变更', ?)",
+            [patentId, `状态变更为"${newStatus}"，已取消所有待缴费任务`]
+        );
+    }
+
+    // 4) → 专利权生效（手动编辑路径）: 生成首年年费（如已有则跳过）
+    if (newStatus === '专利权生效' && p.apply_date) {
+        const dueDate = calculateFeeDueDate(p.apply_date, 1);
+        const amount = getAnnualFeeAmount(p.patent_type, 1);
+        if (amount > 0) {
+            const rate = getFeeReductionRate(p.fee_reduction);
+            const finalAmount = rate > 0 ? Math.round(amount * rate) : amount;
+            const ok = await createFeeTaskIfNotExists(patentId, '年费', 1, finalAmount, dueDate);
+            if (ok) {
+                await window.patentAPI.dbRun(
+                    "INSERT INTO operation_logs (patent_id, action_type, description) VALUES (?, '任务生成', ?)",
+                    [patentId, `状态变更为"专利权生效"，自动生成了首年年费任务（¥${finalAmount}，截止${dueDate}）`]
+                );
+            }
+        }
+    }
 }
 
 // ============================================
@@ -1214,6 +1344,34 @@ function enterEditMode() {
         });
         editGrid.innerHTML = html;
 
+        // 查询当前紧迫任务并渲染编辑字段
+        window.patentAPI.dbQuery(
+            "SELECT id, fee_type, year_index, amount, due_date FROM fee_tasks WHERE patent_id = ? AND status = '待缴费' ORDER BY due_date ASC LIMIT 1",
+            [currentDetailPatentId]
+        ).then(urgentTasks => {
+            const u = urgentTasks.length > 0 ? urgentTasks[0] : null;
+            let urgentHtml = '<div class="pd-edit-section-header">当前紧迫任务</div>';
+
+            // 费用类型
+            const feeTypes = ['申请费', '公布印刷费', '实质审查费', '授权登记费', '年费'];
+            let opts = '<option value="">无</option>';
+            feeTypes.forEach(t => {
+                opts += `<option value="${t}"${u?.fee_type === t ? ' selected' : ''}>${t}</option>`;
+            });
+            urgentHtml += `<div class="pd-edit-field"><label>费用类型</label><select data-key="urgent_fee_type">${opts}</select></div>`;
+
+            // 年度（年费专用）
+            urgentHtml += `<div class="pd-edit-field"><label>年度</label><input type="number" value="${u?.year_index || ''}" data-key="urgent_year_index" placeholder="年费专用"></div>`;
+
+            // 金额
+            urgentHtml += `<div class="pd-edit-field"><label>金额(¥)</label><input type="number" step="0.01" value="${u?.amount || ''}" data-key="urgent_amount"></div>`;
+
+            // 截止日期
+            urgentHtml += `<div class="pd-edit-field pd-edit-field-full"><label>截止日期</label><input type="date" value="${u?.due_date || ''}" data-key="urgent_due_date"></div>`;
+
+            editGrid.insertAdjacentHTML('beforeend', urgentHtml);
+        });
+
         viewGrid.classList.add('hidden');
         editGrid.classList.remove('hidden');
         actions.classList.remove('hidden');
@@ -1252,6 +1410,12 @@ async function savePatentEdit() {
         return;
     }
     try {
+        // 查询旧状态，用于后续状态变更联动
+        const oldPatents = await window.patentAPI.dbQuery(
+            "SELECT status FROM patents WHERE id = ?", [currentDetailPatentId]
+        );
+        const oldStatus = oldPatents.length > 0 ? oldPatents[0].status : null;
+
         await window.patentAPI.dbRun(
             `UPDATE patents SET patent_no=?, patent_name=?, patent_type=?, inventor=?, applicant=?,
              apply_date=?, authorize_date=?, status=?, fee_reduction=?, notes=?,
@@ -1261,12 +1425,40 @@ async function savePatentEdit() {
              data.status || '撰写中', data.fee_reduction || '无', data.notes || '',
              currentDetailPatentId]
         );
+        // 状态变更联动
+        if (oldStatus && oldStatus !== data.status) {
+            await handleStatusChange(currentDetailPatentId, data.status);
+        }
+
+        // 保存紧迫任务编辑
+        const urgentFeeType = data.urgent_fee_type;
+        const urgentYearIndex = data.urgent_year_index ? parseInt(data.urgent_year_index) : null;
+        const urgentAmount = data.urgent_amount ? parseFloat(data.urgent_amount) : 0;
+        const urgentDueDate = data.urgent_due_date;
+        if (urgentFeeType && urgentDueDate) {
+            const existing = await window.patentAPI.dbQuery(
+                "SELECT id FROM fee_tasks WHERE patent_id = ? AND status = '待缴费' ORDER BY due_date ASC LIMIT 1",
+                [currentDetailPatentId]
+            );
+            if (existing.length > 0) {
+                await window.patentAPI.dbRun(
+                    "UPDATE fee_tasks SET fee_type=?, year_index=?, amount=?, due_date=? WHERE id=?",
+                    [urgentFeeType, urgentYearIndex, urgentAmount, urgentDueDate, existing[0].id]
+                );
+            } else {
+                await window.patentAPI.dbRun(
+                    "INSERT INTO fee_tasks (patent_id, fee_type, year_index, amount, due_date, status) VALUES (?, ?, ?, ?, ?, '待缴费')",
+                    [currentDetailPatentId, urgentFeeType, urgentYearIndex, urgentAmount, urgentDueDate]
+                );
+            }
+        }
         await window.patentAPI.dbRun(
             "INSERT INTO operation_logs (patent_id, action_type, description) VALUES (?, '编辑', '修改专利基本信息')",
             [currentDetailPatentId]
         );
         await showAlertModal('保存成功');
-        // 刷新详情
+        // 刷新列表和详情
+        loadPatentList();
         showPatentDetail(currentDetailPatentId);
     } catch (err) {
         await showAlertModal('保存失败：' + err.message);
@@ -1286,6 +1478,7 @@ async function deleteCurrentPatent() {
             [currentDetailPatentId]
         );
         await showAlertModal('已移入回收站');
+        loadPatentList();
         hidePatentDetail();
     } catch (err) {
         await showAlertModal('操作失败：' + err.message);
