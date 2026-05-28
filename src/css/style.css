@@ -284,6 +284,8 @@ body {
 .btn-default { background: #fff; color: #333; }
 .btn-default:hover { border-color: #1890ff; color: #1890ff; }
 .btn-sm { height: 30px; padding: 0 12px; font-size: 13px; }
+.btn-danger { background: #ff4d4f; color: #fff; border-color: #ff4d4f; }
+.btn-danger:hover { background: #ff7875; border-color: #ff7875; color: #fff; }
 
 /* ============================================ */
 /* 子标签导航（数据中心内嵌标签） */
@@ -438,6 +440,11 @@ body {
 .import-table td {
     padding: 8px 12px;
     border-bottom: 1px solid #f0f0f0;
+}
+.import-table th.col-checkbox,
+.import-table td.col-checkbox {
+    width: 40px;
+    text-align: center;
 }
 .import-errors {
     margin-top: 12px;
@@ -874,6 +881,10 @@ body {
 .warning-text {
     font-size: 12px;
     margin-left: 4px;
+}
+.warning-dot-orange {
+    background: #fa8c16;
+    box-shadow: 0 0 4px rgba(250,140,22,0.4);
 }
 .warning-dot-green {
     background: #52c41a;

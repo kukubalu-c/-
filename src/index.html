@@ -355,12 +355,18 @@
                             <div class="card-header"><span class="card-title">回收站</span></div>
                             <div class="card-body">
                                 <div id="recycleList">
+                                    <div class="recycle-toolbar" style="margin-bottom:8px;display:flex;gap:8px;align-items:center;">
+                                        <button class="btn btn-default btn-sm" id="btnBatchRestore">批量恢复</button>
+                                        <button class="btn btn-danger btn-sm" id="btnBatchPermanentDelete">批量删除</button>
+                                        <span style="font-size:12px;color:#999;">勾选后批量操作</span>
+                                    </div>
                                     <table class="import-table">
                                         <thead><tr>
+                                            <th class="col-checkbox"><input type="checkbox" id="recycleCheckAll"></th>
                                             <th>专利号</th><th>名称</th><th>类型</th><th>删除时间</th><th>操作</th>
                                         </tr></thead>
                                         <tbody id="recycleBody">
-                                            <tr id="recycleEmpty"><td colspan="5" class="text-center text-muted">回收站为空</td></tr>
+                                            <tr id="recycleEmpty"><td colspan="6" class="text-center text-muted">回收站为空</td></tr>
                                         </tbody>
                                     </table>
                                 </div>

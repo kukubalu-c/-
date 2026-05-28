@@ -837,7 +837,9 @@ function renderPatentRow(patent, urgent, warning) {
 
     // 预警灯 + 天数
     let warningHtml = '';
-    if (w.level === 'overdue') {
+    if (urgent && urgent.type === 'attachment') {
+        warningHtml = '<span class="warning-dot warning-dot-orange"></span>';
+    } else if (w.level === 'overdue') {
         warningHtml = `<span class="warning-dot warning-dot-red"></span><span class="warning-text warning-text-red">逾期${w.days}天</span>`;
     } else if (w.level === 'urgent') {
         warningHtml = `<span class="warning-dot warning-dot-yellow"></span><span class="warning-text warning-text-yellow">剩余${w.days}天</span>`;
@@ -1238,9 +1240,7 @@ async function uploadTaskAttachment(patentId, idx) {
             const execBtn = card.querySelector('.transition-execute');
             if (execBtn) execBtn.disabled = false;
         }
-        document.getElementById(`taskStepStatus_${idx}`).textContent = '上传成功 ✓';
     } catch (err) {
-        document.getElementById(`taskStepStatus_${idx}`).textContent = '上传失败';
         await showAlertModal('上传失败：' + err.message);
     }
 }

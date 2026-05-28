@@ -57,6 +57,10 @@ function initSubTabs() {
             document.querySelectorAll('.sub-page').forEach(p => {
                 p.classList.toggle('active', p.id === 'sub' + subPage.charAt(0).toUpperCase() + subPage.slice(1));
             });
+            // 切换到回收站时自动刷新数据
+            if (tab.dataset.subpage === 'recycle') {
+                loadRecycleBin();
+            }
         });
     });
 }
@@ -121,6 +125,11 @@ function initRecycle() {
     loadRecycleBin();
     loadBackups();
     document.getElementById('btnRefreshBackups').addEventListener('click', loadBackups);
+    document.getElementById('btnBatchRestore').addEventListener('click', batchRestore);
+    document.getElementById('btnBatchPermanentDelete').addEventListener('click', batchPermanentDelete);
+    document.getElementById('recycleCheckAll').addEventListener('change', function () {
+        document.querySelectorAll('.recycle-checkbox').forEach(cb => cb.checked = this.checked);
+    });
 }
 
 /**
@@ -137,18 +146,22 @@ async function loadRecycleBin() {
 
     const tbody = document.getElementById('recycleBody');
     if (patents.length === 0) {
-        tbody.innerHTML = '<tr id="recycleEmpty"><td colspan="5" class="text-center text-muted">回收站为空</td></tr>';
+        tbody.innerHTML = '<tr id="recycleEmpty"><td colspan="6" class="text-center text-muted">回收站为空</td></tr>';
         return;
     }
 
     let html = '';
     patents.forEach(p => {
         html += `<tr>
+            <td class="col-checkbox"><input type="checkbox" class="recycle-checkbox" value="${p.id}"></td>
             <td>${p.patent_no}</td>
             <td>${p.patent_name}</td>
             <td>${p.patent_type}</td>
             <td>${p.deleted_at || '-'}</td>
-            <td><button class="btn btn-default btn-sm" onclick="restorePatent(${p.id})">恢复</button></td>
+            <td style="white-space:nowrap;">
+                <button class="btn btn-default btn-sm" onclick="restorePatent(${p.id})">恢复</button>
+                <button class="btn btn-danger btn-sm" onclick="permanentDeletePatent(${p.id})">彻底删除</button>
+            </td>
         </tr>`;
     });
     tbody.innerHTML = html;
@@ -167,6 +180,66 @@ async function restorePatent(id) {
         "UPDATE patents SET is_deleted = 0, deleted_at = NULL, updated_at = datetime('now','localtime') WHERE id = ?",
         [id]
     );
+    loadRecycleBin();
+}
+
+/**
+ * 函数名：permanentDeletePatent
+ * 作用：从数据库中彻底删除专利记录（不可恢复）
+ * 参数：
+ *   - id - number - 专利ID
+ * 返回值：Promise<void>
+ * 使用场景：用户点击"彻底删除"按钮时
+ */
+async function permanentDeletePatent(id) {
+    if (!await showConfirmModal('确定要彻底删除该专利吗？此操作不可恢复！')) return;
+    await window.patentAPI.dbRun("DELETE FROM patents WHERE id = ? AND is_deleted = 1", [id]);
+    loadRecycleBin();
+}
+
+/**
+ * 函数名：batchRestore
+ * 作用：批量恢复选中的专利
+ * 参数：无
+ * 返回值：Promise<void>
+ * 使用场景：用户勾选多条后点击"批量恢复"按钮时
+ */
+async function batchRestore() {
+    const checked = document.querySelectorAll('.recycle-checkbox:checked');
+    if (checked.length === 0) {
+        await showAlertModal('请先勾选要恢复的专利');
+        return;
+    }
+    if (!await showConfirmModal(`确定要恢复选中的 ${checked.length} 条专利吗？`)) return;
+    const ids = Array.from(checked).map(cb => cb.value);
+    await window.patentAPI.dbRun(
+        "UPDATE patents SET is_deleted = 0, deleted_at = NULL, updated_at = datetime('now','localtime') WHERE id IN (" + ids.map(() => '?').join(',') + ") AND is_deleted = 1",
+        ids
+    );
+    document.getElementById('recycleCheckAll').checked = false;
+    loadRecycleBin();
+}
+
+/**
+ * 函数名：batchPermanentDelete
+ * 作用：批量彻底删除选中的专利记录
+ * 参数：无
+ * 返回值：Promise<void>
+ * 使用场景：用户勾选多条后点击"批量删除"按钮时
+ */
+async function batchPermanentDelete() {
+    const checked = document.querySelectorAll('.recycle-checkbox:checked');
+    if (checked.length === 0) {
+        await showAlertModal('请先勾选要删除的专利');
+        return;
+    }
+    if (!await showConfirmModal(`确定要彻底删除选中的 ${checked.length} 条专利吗？此操作不可恢复！`)) return;
+    const ids = Array.from(checked).map(cb => cb.value);
+    await window.patentAPI.dbRun(
+        "DELETE FROM patents WHERE id IN (" + ids.map(() => '?').join(',') + ") AND is_deleted = 1",
+        ids
+    );
+    document.getElementById('recycleCheckAll').checked = false;
     loadRecycleBin();
 }
 
@@ -334,7 +407,24 @@ function parseImportData(rows) {
         Object.keys(row).forEach(key => {
             const dbField = fieldMap[key.trim()] || null;
             if (dbField) {
-                mapped[dbField] = String(row[key]).trim();
+                // 日期字段处理：Excel 日期序列号 → YYYY-MM-DD
+                if (dbField === 'apply_date' || dbField === 'authorize_date') {
+                    const val = row[key];
+                    if (typeof val === 'number' && val > 59) {
+                        try {
+                            const parsed = XLSX.SSF.parse_date_code(val);
+                            if (parsed && parsed.y) {
+                                const m = String(parsed.m).padStart(2, '0');
+                                const d = String(parsed.d).padStart(2, '0');
+                                mapped[dbField] = `${parsed.y}-${m}-${d}`;
+                                return;
+                            }
+                        } catch (e) { /* 解析失败则 fallthrough 到 String 处理 */ }
+                    }
+                    mapped[dbField] = String(val).trim();
+                } else {
+                    mapped[dbField] = String(row[key]).trim();
+                }
             }
         });
 
@@ -424,12 +514,28 @@ async function confirmImport() {
         return;
     }
 
-    // 去重检查
+    // 去重检查：文件内重复
+    const seenNos = {};
+    const fileDuplicates = [];
+    const dedupedData = [];
+    for (const row of importData) {
+        if (seenNos[row.patent_no]) {
+            fileDuplicates.push(row);
+        } else {
+            seenNos[row.patent_no] = true;
+            dedupedData.push(row);
+        }
+    }
+    if (fileDuplicates.length > 0) {
+        console.warn('文件内发现 ' + fileDuplicates.length + ' 条重复专利号，已跳过');
+    }
+
+    // 去重检查：数据库重复
     const duplicates = [];
     const newData = [];
-    for (const row of importData) {
+    for (const row of dedupedData) {
         const existing = await window.patentAPI.dbQuery(
-            "SELECT id, patent_name FROM patents WHERE patent_no = ? AND is_deleted = 0",
+            "SELECT id, patent_name, is_deleted FROM patents WHERE patent_no = ?",
             [row.patent_no]
         );
         if (existing.length > 0) {

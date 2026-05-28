@@ -147,6 +147,12 @@ function initNavigation() {
             Object.keys(pages).forEach(key => {
                 pages[key].classList.toggle('active', key === pageName);
             });
+
+            // 3.3 切换到工作台时刷新列表（确保数据最新）
+            if (pageName === 'workbench' && typeof loadPatentList === 'function') {
+                if (typeof currentPage !== 'undefined') currentPage = 1;
+                loadPatentList();
+            }
         });
     });
 }
