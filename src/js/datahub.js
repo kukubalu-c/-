@@ -319,18 +319,48 @@ function downloadTemplate() {
     // 使用 XLSX 库生成模板文件
     const headers = [
         ['专利号/申请号', '专利名称', '专利类型', '发明人', '申请人',
-         '申请日期', '授权公告日', '权利状态', '费减比例', '备注']
+         '申请日期', '授权公告日', '权利状态', '费减比例', '备注',
+         '待办任务', '截止日期', '费用']
     ];
     const example = [
         ['202310123456.7', '示例专利名称', '发明', '张三', '某公司',
-         '2023-01-15', '', '撰写中', '无', '']
+         '2023-01-15', '', '专利权生效', '无', '',
+         '年费-第8年', '2027-01-16', '900']
     ];
     const ws = XLSX.utils.aoa_to_sheet(headers.concat(example));
     // 设置列宽
-    ws['!cols'] = [{ wch: 18 }, { wch: 30 }, { wch: 10 }, { wch: 15 }, { wch: 20 },
-                    { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 20 }];
+    ws['!cols'] = [
+        { wch: 18 }, { wch: 30 }, { wch: 10 }, { wch: 15 }, { wch: 20 },
+        { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 20 },
+        { wch: 20 }, { wch: 14 }, { wch: 12 }
+    ];
+
+    // 填写说明 sheet
+    const hints = [
+        ['字段', '填写说明'],
+        ['专利号/申请号', '必填，13位数字.1位校验位（如 202310123456.7）'],
+        ['专利名称', '必填'],
+        ['专利类型', '可选，发明 / 实用新型 / 外观设计'],
+        ['发明人', '可选'],
+        ['申请人', '可选'],
+        ['申请日期', '可选，YYYY-MM-DD 或 Excel 日期格式'],
+        ['授权公告日', '可选，YYYY-MM-DD 或 Excel 日期格式'],
+        ['权利状态', '可选，撰写中 / 已申请 / 形式审查中 / 实质审查中 / OA答复中 / 通知授权 / 专利权生效 / 已驳回 / 已撤回 / 已终止'],
+        ['费减比例', '可选，无 / 个人 / 小微企业 / 普通企业 / 事业高校'],
+        ['备注', '可选'],
+        ['待办任务', '可选。导入时自动创建待办缴费任务。格式：年费-第N年 / 申请费 / 授权登记费 / 公布印刷费 / 实质审查费'],
+        ['截止日期', '待办任务的缴费截止日期。格式：YYYY-MM-DD'],
+        ['费用', '待办任务的金额（元）。留空则根据专利类型和费减比例自动计算'],
+        ['', ''],
+        ['示例', '专利权生效的专利，待办任务填"年费-第8年"，截止日期填"2027-01-16"，费用填"900"'],
+        ['示例', '已申请的专利，待办任务填"申请费"，截止日期填"2023-03-15"'],
+    ];
+    const wsHints = XLSX.utils.aoa_to_sheet(hints);
+    wsHints['!cols'] = [{ wch: 18 }, { wch: 60 }];
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, '专利导入模板');
+    XLSX.utils.book_append_sheet(wb, wsHints, '填写说明');
     XLSX.writeFile(wb, '专利导入模板.xlsx');
 }
 
@@ -397,7 +427,10 @@ function parseImportData(rows) {
         '授权公告日': 'authorize_date',
         '权利状态': 'status', '状态': 'status',
         '费减比例': 'fee_reduction',
-        '备注': 'notes'
+        '备注': 'notes',
+        '待办任务': 'task_desc',
+        '截止日期': 'task_due_date',
+        '费用': 'task_amount'
     };
 
     rows.forEach((row, idx) => {
@@ -408,7 +441,7 @@ function parseImportData(rows) {
             const dbField = fieldMap[key.trim()] || null;
             if (dbField) {
                 // 日期字段处理：Excel 日期序列号 → YYYY-MM-DD
-                if (dbField === 'apply_date' || dbField === 'authorize_date') {
+                if (dbField === 'apply_date' || dbField === 'authorize_date' || dbField === 'task_due_date') {
                     const val = row[key];
                     if (typeof val === 'number' && val > 59) {
                         try {
@@ -422,6 +455,17 @@ function parseImportData(rows) {
                         } catch (e) { /* 解析失败则 fallthrough 到 String 处理 */ }
                     }
                     mapped[dbField] = String(val).trim();
+                } else if (dbField === 'task_amount') {
+                    // 费用字段：数字或空
+                    const val = row[key];
+                    if (val === '' || val === null || val === undefined) {
+                        mapped[dbField] = '';
+                    } else if (typeof val === 'number') {
+                        mapped[dbField] = val;
+                    } else {
+                        const n = parseFloat(String(val).trim());
+                        mapped[dbField] = isNaN(n) ? '' : n;
+                    }
                 } else {
                     mapped[dbField] = String(row[key]).trim();
                 }
@@ -573,7 +617,7 @@ async function confirmImport() {
                     "DELETE FROM patents WHERE patent_no = ?", [row.patent_no]
                 );
             }
-            await window.patentAPI.dbRun(
+            const result = await window.patentAPI.dbRun(
                 `INSERT INTO patents (patent_no, patent_name, patent_type, inventor, applicant,
                  apply_date, authorize_date, status, fee_reduction, notes)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -582,6 +626,10 @@ async function confirmImport() {
                  row.apply_date || null, row.authorize_date || null,
                  row.status || '撰写中', row.fee_reduction || '无', row.notes || '']
             );
+            // 如果有待办任务信息，创建 fee_task
+            if (result && result.lastInsertRowid && row.task_desc && row.task_due_date) {
+                await createImportFeeTask(result.lastInsertRowid, row);
+            }
             successCount++;
         } catch (err) {
             console.error('导入失败:', row.patent_no, err);
@@ -592,6 +640,78 @@ async function confirmImport() {
     document.getElementById('importPreview').classList.add('hidden');
     document.getElementById('fileInput').value = '';
     importData = [];
+}
+
+/**
+ * 函数名：createImportFeeTask
+ * 作用：根据导入行的待办任务信息创建 fee_task
+ * 参数：
+ *   - patentId - number - 专利 ID
+ *   - row - Object - 导入行数据（含 task_desc, task_due_date, task_amount, patent_type, fee_reduction）
+ * 返回值：Promise<void>
+ */
+async function createImportFeeTask(patentId, row) {
+    const desc = row.task_desc.trim();
+    let feeType = '';
+    let yearIndex = null;
+
+    // 解析 task_desc
+    const yearMatch = desc.match(/^年费-第(\d+)年$/);
+    if (yearMatch) {
+        feeType = '年费';
+        yearIndex = parseInt(yearMatch[1]);
+    } else if (desc === '申请费') {
+        feeType = '申请费';
+    } else if (desc === '授权登记费') {
+        feeType = '授权登记费';
+    } else if (desc === '公布印刷费') {
+        feeType = '公布印刷费';
+    } else if (desc === '实质审查费') {
+        feeType = '实质审查费';
+    } else {
+        return; // 无法识别的任务格式，跳过
+    }
+
+    if (!row.task_due_date) return; // 截止日期不能为空
+
+    // 计算金额
+    let amount = 0;
+    if (row.task_amount !== '' && row.task_amount !== null && row.task_amount !== undefined) {
+        amount = Number(row.task_amount);
+    } else {
+        // 自动计算
+        if (feeType === '年费' && yearIndex) {
+            amount = getAnnualFeeAmount(row.patent_type || '发明', yearIndex);
+        } else {
+            amount = getOtherFeeAmount(feeType, row.patent_type || '发明');
+        }
+        // 应用费减
+        const rate = getFeeReductionRate(row.fee_reduction || '无');
+        if (rate > 0) {
+            amount = Math.round(amount * rate);
+        }
+    }
+    if (amount <= 0) return;
+
+    try {
+        // 检查是否已存在相同任务（避免重复导入）
+        const existing = await window.patentAPI.dbQuery(
+            "SELECT id FROM fee_tasks WHERE patent_id = ? AND fee_type = ? AND year_index IS ? AND status = '待缴费'",
+            [patentId, feeType, yearIndex || null]
+        );
+        if (existing.length > 0) return;
+
+        await window.patentAPI.dbRun(
+            "INSERT INTO fee_tasks (patent_id, fee_type, year_index, amount, due_date, status) VALUES (?, ?, ?, ?, ?, '待缴费')",
+            [patentId, feeType, yearIndex, amount, row.task_due_date]
+        );
+        await window.patentAPI.dbRun(
+            "INSERT INTO operation_logs (patent_id, action_type, description) VALUES (?, '任务生成', ?)",
+            [patentId, `导入时创建待办：${desc}，金额¥${amount}，截止${row.task_due_date}`]
+        );
+    } catch (err) {
+        console.error('创建费用任务失败:', patentId, err);
+    }
 }
 
 /**
