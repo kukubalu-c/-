@@ -84,6 +84,21 @@
         saveFileDialog: () => null,
         getAppPath: () => null,
 
+        // === 附件管理 ===
+        uploadFile: async (patentId, fileName, fileType, fileData) => {
+            const result = await apiPost('/upload', {
+                patent_id: patentId,
+                file_name: fileName,
+                file_type: fileType,
+                file_data: fileData
+            });
+            return result;
+        },
+        deleteAttachment: async (id) => {
+            const result = await apiPost('/attachments/delete', { id });
+            return result.success;
+        },
+
         // === 事件监听（浏览器版无 IPC，空函数） ===
         onBackupReady: () => {}
     };

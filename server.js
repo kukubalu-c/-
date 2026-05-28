@@ -177,6 +177,49 @@ async function handleApiRequest(req, res) {
             const settings = db.query("SELECT value FROM settings WHERE key = 'app_password'");
             result = { isSet: settings.length > 0 };
         }
+        // === 上传附件 ===
+        else if (pathname === '/api/upload' && method === 'POST') {
+            const body = await parseBody(req);
+            const patentId = body.patent_id;
+            const uploadDir = path.join(DATA_DIR, 'uploads', String(patentId));
+            if (!fs.existsSync(uploadDir)) {
+                fs.mkdirSync(uploadDir, { recursive: true });
+            }
+            // 文件名冲突时自动加数字后缀
+            let finalName = body.file_name;
+            let filePath = path.join(uploadDir, finalName);
+            let counter = 1;
+            while (fs.existsSync(filePath)) {
+                const ext = path.extname(body.file_name);
+                const base = path.basename(body.file_name, ext);
+                finalName = `${base}_${counter}${ext}`;
+                filePath = path.join(uploadDir, finalName);
+                counter++;
+            }
+            // 解码 base64 写入文件
+            const buffer = Buffer.from(body.file_data, 'base64');
+            fs.writeFileSync(filePath, buffer);
+            // 记录到数据库
+            const relativePath = `uploads/${patentId}/${finalName}`;
+            const dbResult = db.run(
+                "INSERT INTO attachments (patent_id, file_name, file_path, file_type) VALUES (?, ?, ?, ?)",
+                [patentId, finalName, relativePath, body.file_type || '其他']
+            );
+            result = { id: dbResult.lastInsertRowid, file_path: relativePath };
+        }
+        // === 删除附件 ===
+        else if (pathname === '/api/attachments/delete' && method === 'POST') {
+            const body = await parseBody(req);
+            const atts = db.query("SELECT file_path FROM attachments WHERE id = ?", [body.id]);
+            if (atts.length > 0) {
+                const fullPath = path.join(DATA_DIR, atts[0].file_path);
+                if (fs.existsSync(fullPath)) {
+                    fs.unlinkSync(fullPath);
+                }
+                db.run("DELETE FROM attachments WHERE id = ?", [body.id]);
+            }
+            result = { success: true };
+        }
         // === 数据库备份 ===
         else if (pathname === '/api/db/backup' && method === 'POST') {
             result = { success: db.backup() };
@@ -236,6 +279,8 @@ function startHttpServer() {
             filePath = path.join(SRC_DIR, 'index.html');
         } else if (pathname.startsWith('/node_modules/')) {
             filePath = path.join(ROOT_DIR, pathname);
+        } else if (pathname.startsWith('/uploads/')) {
+            filePath = path.join(DATA_DIR, pathname);
         } else {
             filePath = path.join(SRC_DIR, pathname);
         }

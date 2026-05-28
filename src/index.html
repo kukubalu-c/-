@@ -405,6 +405,7 @@
                     <button class="pd-tab active" data-pdtab="info">基本信息</button>
                     <button class="pd-tab" data-pdtab="fee">缴费记录</button>
                     <button class="pd-tab" data-pdtab="log">操作日志</button>
+                    <button class="pd-tab" data-pdtab="attachment">附件管理</button>
                 </div>
 
                 <div class="pd-scroll-area">
@@ -433,27 +434,50 @@
                             <tbody id="pdLogBody"><tr><td colspan="3" class="text-center text-muted">暂无记录</td></tr></tbody>
                         </table>
                     </div>
+                    <div class="pd-tab-content" id="pdTabAttachment">
+                        <div class="att-upload-bar">
+                            <input type="file" id="attFileInput" accept=".pdf,.png,.jpg,.jpeg,.gif" class="att-file-input">
+                            <select id="attFileType" class="att-type-select">
+                                <option value="">标注文件类型…</option>
+                                <option value="专利申请受理通知书">专利申请受理通知书</option>
+                                <option value="进入实质审查阶段通知书">进入实质审查阶段通知书</option>
+                                <option value="审查意见通知书">审查意见通知书</option>
+                                <option value="意见陈述书">意见陈述书及权利要求书</option>
+                                <option value="授予专利权通知书">授予专利权通知书</option>
+                                <option value="驳回决定">驳回决定</option>
+                                <option value="撤回声明">撤回声明</option>
+                                <option value="缴费凭证">缴费凭证</option>
+                                <option value="其他">其他</option>
+                            </select>
+                            <button class="btn btn-primary btn-sm" id="btnUploadAtt">上传</button>
+                        </div>
+                        <table class="import-table" style="margin-top:12px;">
+                            <thead><tr>
+                                <th>文件名</th><th width="140">文件类型</th><th width="160">上传时间</th><th width="120">操作</th>
+                            </tr></thead>
+                            <tbody id="attBody"><tr><td colspan="4" class="text-center text-muted">暂无附件</td></tr></tbody>
+                        </table>
+                    </div>
                 </div>
 
                 <div class="pd-bottom-actions">
+                    <button class="btn btn-primary btn-sm" id="btnDetailCompleteTask">✔ 完成待办</button>
                     <button class="btn btn-default btn-sm" id="btnDetailEdit">✏️ 编辑</button>
                     <button class="btn btn-default btn-sm" id="btnDetailDelete" style="color:#f5222d;border-color:#f5222d;">🗑 删除</button>
                 </div>
             </div>
         </div>
 
-        <!-- 完成待办弹窗 -->
+        <!-- 完成待办弹窗（动态内容） -->
         <div class="modal-overlay hidden" id="taskModal">
-            <div class="modal">
+            <div class="modal modal-lg">
                 <div class="detail-header">
                     <h4>完成待办事项</h4>
                     <button class="detail-close" id="taskModalClose">&times;</button>
                 </div>
-                <p class="text-muted mb-16">选择要标记为已完成的待办事项：</p>
-                <div class="task-list" id="taskList"></div>
+                <div id="taskModalBody"></div>
                 <div class="modal-actions">
-                    <button class="btn btn-primary" id="btnConfirmTasks">确认完成</button>
-                    <button class="btn btn-default" id="btnCancelTasks">取消</button>
+                    <button class="btn btn-default" id="btnCancelTasks">关闭</button>
                 </div>
             </div>
         </div>

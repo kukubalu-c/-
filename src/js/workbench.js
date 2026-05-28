@@ -467,9 +467,14 @@ function initWorkbenchList() {
     // 专利详情页 - 关闭浮层
     document.getElementById('btnCloseDetail').addEventListener('click', hidePatentDetail);
     document.querySelector('#patentDetailContainer .pd-backdrop').addEventListener('click', hidePatentDetail);
-    // 专利详情页 - 编辑/删除
+    // 专利详情页 - 编辑/删除/完成待办
     document.getElementById('btnDetailEdit').addEventListener('click', enterEditMode);
     document.getElementById('btnDetailDelete').addEventListener('click', deleteCurrentPatent);
+    document.getElementById('btnDetailCompleteTask').addEventListener('click', () => {
+        if (currentDetailPatentId) completeTask(currentDetailPatentId);
+    });
+    // 上传附件
+    document.getElementById('btnUploadAtt').addEventListener('click', uploadAttachment);
     // 专利详情页 - 保存/取消编辑
     document.getElementById('btnSaveEdit').addEventListener('click', savePatentEdit);
     document.getElementById('btnCancelEdit').addEventListener('click', async () => {
@@ -481,7 +486,12 @@ function initWorkbenchList() {
             document.querySelectorAll('.pd-tab').forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
             document.querySelectorAll('.pd-tab-content').forEach(c => c.classList.remove('active'));
-            document.getElementById('pdTab' + tab.dataset.pdtab.charAt(0).toUpperCase() + tab.dataset.pdtab.slice(1)).classList.add('active');
+            const tabId = 'pdTab' + tab.dataset.pdtab.charAt(0).toUpperCase() + tab.dataset.pdtab.slice(1);
+            document.getElementById(tabId).classList.add('active');
+            // 附件管理标签被点击时渲染列表
+            if (tab.dataset.pdtab === 'attachment' && currentDetailPatentId) {
+                renderDetailAttachments(currentDetailPatentId);
+            }
         });
     });
     // 关闭待办弹窗
@@ -491,9 +501,11 @@ function initWorkbenchList() {
     document.getElementById('btnCancelTasks').addEventListener('click', () => {
         document.getElementById('taskModal').classList.add('hidden');
     });
-    // 确认完成待办
-    document.getElementById('btnConfirmTasks').addEventListener('click', confirmTasksComplete);
-
+    document.getElementById('taskModal').addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) {
+            document.getElementById('taskModal').classList.add('hidden');
+        }
+    });
     // 自定义确认弹窗
     document.getElementById('btnConfirmCancel').addEventListener('click', () => {
         document.getElementById('confirmModal').classList.add('hidden');
@@ -675,7 +687,7 @@ function buildWhereClause(filters) {
 
 /**
  * 函数名：computeWarningMap
- * 作用：根据专利列表批量查询 fee_tasks，计算预警等级和紧迫任务
+ * 作用：综合 fee_tasks + STATUS_TRANSITIONS + attachments 计算紧迫任务和预警
  */
 async function computeWarningMap(patents) {
     const patentIds = patents.map(p => p.id);
@@ -685,36 +697,112 @@ async function computeWarningMap(patents) {
     if (patentIds.length === 0) return { urgentMap, warningMap };
 
     const placeholders = patentIds.map(() => '?').join(',');
+
+    // 1) 待缴费任务
     const tasks = await window.patentAPI.dbQuery(
         "SELECT patent_id, fee_type, year_index, due_date, amount FROM fee_tasks WHERE patent_id IN (" + placeholders + ") AND status = '待缴费' ORDER BY patent_id, due_date ASC",
         patentIds
     );
-
-    const grouped = {};
+    const feeByPatent = {};
     tasks.forEach(t => {
-        if (!grouped[t.patent_id]) grouped[t.patent_id] = [];
-        grouped[t.patent_id].push(t);
+        if (!feeByPatent[t.patent_id]) feeByPatent[t.patent_id] = [];
+        feeByPatent[t.patent_id].push(t);
+    });
+
+    // 2) 查各专利状态对应的流转规则
+    const uniqueStatuses = [...new Set(patents.map(p => p.status))];
+    let transitions = [];
+    if (uniqueStatuses.length > 0) {
+        const sp = uniqueStatuses.map(() => '?').join(',');
+        transitions = await window.patentAPI.dbQuery(
+            "SELECT * FROM status_transitions WHERE current_status IN (" + sp + ") OR current_status = '任一'", uniqueStatuses
+        );
+    }
+    const transByStatus = {};
+    transitions.forEach(t => {
+        if (!transByStatus[t.current_status]) transByStatus[t.current_status] = [];
+        transByStatus[t.current_status].push(t);
+    });
+
+    // 3) 已上传附件
+    const atts = await window.patentAPI.dbQuery(
+        "SELECT patent_id, file_type FROM attachments WHERE patent_id IN (" + placeholders + ")", patentIds
+    );
+    const attByPatent = {};
+    atts.forEach(a => {
+        if (!attByPatent[a.patent_id]) attByPatent[a.patent_id] = new Set();
+        attByPatent[a.patent_id].add(a.file_type);
     });
 
     const today = new Date();
-    patentIds.forEach(id => {
-        const list = grouped[id] || [];
-        urgentMap[id] = list.length > 0 ? list[0] : null;
-        if (list.length > 0) {
-            const sorted = [...list].sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
-            const earliest = sorted[0];
-            const dueDate = new Date(earliest.due_date);
-            const diffDays = Math.floor((dueDate - today) / (1000 * 60 * 60 * 24));
-            if (diffDays < 0) {
-                warningMap[id] = { level: 'overdue', days: Math.abs(diffDays) };
-            } else if (diffDays <= 90) {
-                warningMap[id] = { level: 'urgent', days: diffDays };
-            } else {
-                warningMap[id] = { level: 'safe', days: 0 };
+    // 按 patentId 索引
+    const patentMap = {};
+    patents.forEach(p => { patentMap[p.id] = p; });
+
+    patentIds.forEach(pid => {
+        const p = patentMap[pid];
+        if (!p) { urgentMap[pid] = null; warningMap[pid] = { level: 'none', days: 0 }; return; }
+
+        const feeList = feeByPatent[pid] || [];
+        const uploadedTypes = attByPatent[pid] || new Set();
+        const statusTrans = (transByStatus[p.status] || []).filter(t => {
+            if (t.current_status === '形式审查中' && t.next_status === '实质审查中' && p.patent_type !== '发明') return false;
+            if (t.current_status === '形式审查中' && t.next_status === '通知授权' && p.patent_type === '发明') return false;
+            return true;
+        });
+
+        // 找：缺上传、待确认
+        let pendingAtt = null;
+        let pendingConfirm = null;
+        for (const t of statusTrans) {
+            if (t.attachment_required && !uploadedTypes.has(t.attachment_type)) {
+                pendingAtt = t; break;
             }
-        } else {
-            warningMap[id] = { level: 'none', days: 0 };
         }
+        if (!pendingAtt) {
+            for (const t of statusTrans) {
+                if (!t.attachment_required && !t.fee_type) {
+                    pendingConfirm = t; break;
+                }
+            }
+        }
+
+        // 紧迫任务优先级：逾期缴费 > 缺附件 > 30天内缴费 > 待确认 > 其他缴费
+        let urgent = null;
+        let warning = { level: 'none', days: 0 };
+
+        // 逾期缴费
+        const overdueFees = feeList.filter(f => new Date(f.due_date) < today);
+        if (overdueFees.length > 0) {
+            urgent = { type: 'fee', ...overdueFees[0] };
+            warning = { level: 'overdue', days: Math.floor((today - new Date(overdueFees[0].due_date)) / (1000 * 60 * 60 * 24)) };
+        }
+        // 缺必需附件
+        else if (pendingAtt) {
+            urgent = { type: 'attachment', text: `待上传：${pendingAtt.attachment_type}`, attachment_type: pendingAtt.attachment_type };
+            warning = { level: 'urgent', days: 0 };
+        }
+        // 30天内缴费
+        else if (feeList.length > 0) {
+            const sorted = [...feeList].sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
+            const earliest = sorted[0];
+            const diffDays = Math.floor((new Date(earliest.due_date) - today) / (1000 * 60 * 60 * 24));
+            if (diffDays <= 90) {
+                urgent = { type: 'fee', ...earliest };
+                warning = { level: 'urgent', days: diffDays };
+            } else {
+                urgent = { type: 'fee', ...earliest };
+                warning = { level: 'safe', days: 0 };
+            }
+        }
+        // 待确认
+        else if (pendingConfirm) {
+            urgent = { type: 'confirm', text: `待确认：${pendingConfirm.action}` };
+            warning = { level: 'none', days: 0 };
+        }
+
+        urgentMap[pid] = urgent || null;
+        warningMap[pid] = warning;
     });
 
     return { urgentMap, warningMap };
@@ -722,7 +810,7 @@ async function computeWarningMap(patents) {
 
 /**
  * 函数名：renderPatentRow
- * 作用：渲染单行专利数据
+ * 作用：渲染单行专利数据（支持附件/确认/缴费三种紧迫类型）
  */
 function renderPatentRow(patent, urgent, warning) {
     const nameHtml = escapeHtml(patent.patent_name);
@@ -732,12 +820,19 @@ function renderPatentRow(patent, urgent, warning) {
     // 紧迫任务
     let urgentHtml = '<span class="urgent-none">—</span>';
     if (urgent) {
-        const typeLabel = escapeHtml(urgent.fee_type);
-        const yearLabel = urgent.year_index ? `第${urgent.year_index}年` : '';
-        const dueDate = escapeHtml(urgent.due_date);
-        const amount = urgent.amount || 0;
-        const isOverdue = new Date(urgent.due_date) < new Date();
-        urgentHtml = `<div class="urgent-task"><div class="urgent-line1">${yearLabel}${typeLabel}|¥${amount}</div><div class="urgent-line2 ${isOverdue ? 'overdue' : 'due-date'}">截止${dueDate}</div></div>`;
+        if (urgent.type === 'attachment') {
+            urgentHtml = `<div class="urgent-task"><div class="urgent-line1 urgent-att">${escapeHtml(urgent.text)}</div></div>`;
+        } else if (urgent.type === 'confirm') {
+            urgentHtml = `<div class="urgent-task"><div class="urgent-line1 urgent-confirm">${escapeHtml(urgent.text)}</div></div>`;
+        } else {
+            // fee 类型（原有样式）
+            const typeLabel = escapeHtml(urgent.fee_type || '');
+            const yearLabel = urgent.year_index ? `第${urgent.year_index}年` : '';
+            const dueDate = escapeHtml(urgent.due_date || '');
+            const amount = urgent.amount || 0;
+            const isOverdue = dueDate ? new Date(urgent.due_date) < new Date() : false;
+            urgentHtml = `<div class="urgent-task"><div class="urgent-line1">${yearLabel}${typeLabel}|¥${amount}</div><div class="urgent-line2 ${isOverdue ? 'overdue' : 'due-date'}">截止${dueDate}</div></div>`;
+        }
     }
 
     // 预警灯 + 天数
@@ -898,194 +993,416 @@ async function batchDelete() {
 
 /**
  * 函数名：batchCompleteTask
- * 作用：批量完成选中专利的所有待缴费任务
+ * 作用：批量完成选中专利的所有待缴费任务（年费类，不影响状态流转）
  */
 async function batchCompleteTask() {
     const checked = document.querySelectorAll('.patent-checkbox:checked');
     if (checked.length === 0) { await showAlertModal('请先勾选专利'); return; }
     const ids = Array.from(checked).map(cb => parseInt(cb.value));
 
-    try {
-        const placeholders = ids.map(() => '?').join(',');
-        const tasks = await window.patentAPI.dbQuery(
-            "SELECT t.id, t.patent_id, t.fee_type, t.year_index, t.due_date, t.amount, p.patent_no FROM fee_tasks t JOIN patents p ON t.patent_id = p.id WHERE t.patent_id IN (" + placeholders + ") AND t.status = '待缴费' ORDER BY t.patent_id, t.due_date ASC",
-            ids
-        );
+    // 统计待缴任务数
+    const placeholders = ids.map(() => '?').join(',');
+    const tasks = await window.patentAPI.dbQuery(
+        "SELECT id, patent_id, fee_type, year_index FROM fee_tasks WHERE patent_id IN (" + placeholders + ") AND status = '待缴费'",
+        ids
+    );
+    if (tasks.length === 0) {
+        await showAlertModal('所选专利暂无待缴费任务');
+        return;
+    }
+    if (!await showConfirmModal(`确认批量完成 ${tasks.length} 项待缴费任务？`)) return;
 
-        const listEl = document.getElementById('taskList');
-        if (tasks.length === 0) {
-            listEl.innerHTML = '<p class="text-muted text-center" style="padding:24px;">所选专利暂无待缴费事项</p>';
-            document.getElementById('btnConfirmTasks').disabled = true;
-        } else {
-            let html = '';
-            let lastPatentNo = '';
-            tasks.forEach(t => {
-                const yearLabel = t.year_index ? ` (第${t.year_index}年)` : '';
-                const patentLabel = t.patent_no !== lastPatentNo ? `<div style="font-size:11px;color:#999;margin:4px 0 2px 0;">${escapeHtml(t.patent_no)}</div>` : '';
-                lastPatentNo = t.patent_no;
-                html += patentLabel;
-                html += `<label class="task-item">
-                    <input type="checkbox" class="task-checkbox" value="${t.id}">
-                    <span class="task-info">${escapeHtml(t.fee_type)}${yearLabel} - 截止 ${escapeHtml(t.due_date)}</span>
-                    <span class="task-amount">¥${t.amount}</span>
-                </label>`;
-            });
-            listEl.innerHTML = html;
-            document.getElementById('btnConfirmTasks').disabled = false;
+    try {
+        for (const t of tasks) {
+            await window.patentAPI.dbRun(
+                "UPDATE fee_tasks SET status = '已缴费', paid_date = date('now','localtime') WHERE id = ?", [t.id]
+            );
         }
-        document.getElementById('taskModal').dataset.patentId = '';
-        document.getElementById('taskModal').classList.remove('hidden');
+        // 年费生成下一年
+        for (const t of tasks) {
+            if (t.fee_type === '年费' && t.year_index) {
+                const pList = await window.patentAPI.dbQuery("SELECT * FROM patents WHERE id = ?", [t.patent_id]);
+                if (pList.length === 0) continue;
+                const p = pList[0];
+                if (!p.apply_date) continue;
+                const nextYear = t.year_index + 1;
+                const maxYear = getMaxYearForType(p.patent_type);
+                if (nextYear > maxYear) continue;
+                const existing = await window.patentAPI.dbQuery(
+                    "SELECT id FROM fee_tasks WHERE patent_id = ? AND fee_type = '年费' AND year_index = ? AND status = '待缴费'",
+                    [t.patent_id, nextYear]
+                );
+                if (existing.length > 0) continue;
+                const dueDate = calculateFeeDueDate(p.apply_date, nextYear);
+                const amount = getAnnualFeeAmount(p.patent_type, nextYear);
+                const finalAmount = Math.round(amount * getFeeReductionRate(p.fee_reduction));
+                await window.patentAPI.dbRun(
+                    "INSERT INTO fee_tasks (patent_id, fee_type, year_index, amount, due_date, status) VALUES (?, '年费', ?, ?, ?, '待缴费')",
+                    [t.patent_id, nextYear, finalAmount, dueDate]
+                );
+            }
+        }
+        await showAlertModal(`已完成 ${tasks.length} 项待缴费`);
+        document.getElementById('checkAll').checked = false;
+        await window.patentAPI.backupDatabase().catch(() => {});
+        loadPatentList();
     } catch (err) {
-        await showAlertModal('加载待办数据失败：' + err.message);
+        await showAlertModal('批量操作失败：' + err.message);
     }
 }
 
 /**
  * 函数名：completeTask
- * 作用：打开完成待办弹窗，列出专利所有待缴费任务
+ * 作用：打开完成待办弹窗——根据专利当前状态查 STATUS_TRANSITIONS，动态渲染流转卡片
  */
 async function completeTask(patentId) {
     try {
-        const tasks = await window.patentAPI.dbQuery(
-            "SELECT id, fee_type, year_index, due_date, amount FROM fee_tasks WHERE patent_id = ? AND status = '待缴费' ORDER BY due_date ASC",
-            [patentId]
+        const patents = await window.patentAPI.dbQuery("SELECT * FROM patents WHERE id = ?", [patentId]);
+        if (patents.length === 0) return;
+        const p = patents[0];
+
+        // 查当前状态的可能流转
+        const transitions = await window.patentAPI.dbQuery(
+            "SELECT * FROM status_transitions WHERE current_status = ? OR current_status = '任一'",
+            [p.status]
         );
-        const listEl = document.getElementById('taskList');
-        if (tasks.length === 0) {
-            listEl.innerHTML = '<p class="text-muted text-center" style="padding:24px;">该专利暂无待缴费事项</p>';
-            document.getElementById('btnConfirmTasks').disabled = true;
-        } else {
-            let html = '';
-            tasks.forEach(t => {
+
+        // 已上传的附件类型
+        const atts = await window.patentAPI.dbQuery(
+            "SELECT file_type FROM attachments WHERE patent_id = ?", [patentId]
+        );
+        const uploadedTypes = new Set(atts.map(a => a.file_type));
+
+        // 待缴费任务
+        const pendingFees = await window.patentAPI.dbQuery(
+            "SELECT id, fee_type, year_index, amount, due_date FROM fee_tasks WHERE patent_id = ? AND status = '待缴费' ORDER BY due_date", [patentId]
+        );
+
+        const modal = document.getElementById('taskModal');
+        modal.dataset.patentId = patentId;
+        modal.dataset.uploadedTypes = JSON.stringify([...uploadedTypes]);
+
+        let html = `<div class="task-status-bar">当前状态：${renderStatusTag(p.status)}</div>`;
+
+        // 过滤：形式审查中→实质审查中 仅发明适用；→通知授权 仅实用新型/外观设计适用
+        const isInvention = p.patent_type === '发明';
+        const filteredTrans = transitions.filter(t => {
+            if (t.current_status === '形式审查中' && t.next_status === '实质审查中' && !isInvention) return false;
+            if (t.current_status === '形式审查中' && t.next_status === '通知授权' && isInvention) return false;
+            return true;
+        });
+        modal.dataset.transitions = JSON.stringify(filteredTrans);
+
+        // --- 流转卡片 ---
+        if (filteredTrans.length > 0) {
+            html += `<div style="font-size:13px;font-weight:500;color:#333;margin:12px 0 8px;">状态流转</div>`;
+            filteredTrans.forEach((t, idx) => {
+                const attUploaded = t.attachment_required ? uploadedTypes.has(t.attachment_type) : false;
+                const needsFeeFirst = t.current_status === '通知授权' && t.next_status === '专利权生效';
+                let feeTaskId = null;
+                if (needsFeeFirst && t.fee_type) {
+                    const ft = pendingFees.find(f => t.fee_type.includes(f.fee_type) || f.fee_type.includes(t.fee_type.replace(/[（(].*[）)]/, '')));
+                    if (ft) feeTaskId = ft.id;
+                }
+
+                html += `<div class="transition-card" data-idx="${idx}">`;
+                html += `<div class="transition-summary">
+                    <span class="transition-action-text">${escapeHtml(t.action)}</span>
+                    <span class="transition-arrow">→</span>
+                    <span class="transition-next-status">${escapeHtml(t.next_status)}</span>
+                </div>`;
+
+                // 附件上传步骤
+                if (t.attachment_required) {
+                    if (attUploaded) {
+                        html += `<div class="transition-step done">✓ ${escapeHtml(t.attachment_type)} 已上传</div>`;
+                    } else {
+                        const safeType = escapeHtml(t.attachment_type);
+                        html += `<div class="transition-step">
+                            <span class="step-label">📎 上传 ${safeType} <span class="required-mark">*</span></span>
+                            <span class="step-action">
+                                <input type="file" class="task-file-input" accept=".pdf,.png,.jpg,.jpeg" data-idx="${idx}">
+                                <button class="btn btn-primary btn-sm" onclick="uploadTaskAttachment(${patentId}, ${idx})">上传</button>
+                                <span class="step-status" id="taskStepStatus_${idx}"></span>
+                            </span>
+                        </div>`;
+                    }
+                }
+
+                // 缴费步骤（通知授权→专利权生效，需先缴费）
+                if (needsFeeFirst && feeTaskId) {
+                    const feeTask = pendingFees.find(f => f.id === feeTaskId);
+                    html += `<div class="transition-step">
+                        <span class="step-label">💰 缴纳 ${escapeHtml(t.fee_type)} ¥${feeTask.amount}</span>
+                        <span class="step-action">
+                            <label><input type="checkbox" class="task-fee-check" data-task-id="${feeTask.id}" onchange="updateExecuteBtn(${idx})"> 确认已缴费</label>
+                        </span>
+                    </div>`;
+                }
+
+                // 执行按钮
+                const canExec = (!t.attachment_required || attUploaded);
+                html += `<button class="btn btn-primary btn-sm transition-execute" id="execBtn_${idx}" ${canExec ? '' : 'disabled'}
+                    onclick="executeTransition(${patentId}, ${idx})">执行此流转</button>`;
+
+                html += `</div>`;
+            });
+        }
+
+        // --- 独立的缴费任务（年费、申请费等，不触发状态流转的）---
+        // 界定哪些费用已被流转卡片覆盖
+        const coveredTypes = new Set();
+        filteredTrans.forEach(t => {
+            if (t.fee_type) {
+                t.fee_type.split(/[,，]/).forEach(ft => {
+                    const main = ft.replace(/[（(].*[）)]/, '').trim();
+                    if (main) coveredTypes.add(main);
+                });
+            }
+        });
+        // 通知授权→专利权生效 的授权登记费已被上述卡片覆盖，不再出现在独立列表
+        const feeOnly = pendingFees.filter(f => !coveredTypes.has(f.fee_type));
+        // 年费不触发状态流转，始终留在独立列表
+        // 但如果 fee task 的专利处于 专利权生效 以外状态，年费可能也是过渡性费用，所以需要判断
+
+        if (feeOnly.length > 0) {
+            html += `<div class="tc-feesection">
+                <div class="tc-feesection-title">💳 待缴费任务</div>`;
+            feeOnly.forEach(t => {
                 const yearLabel = t.year_index ? ` (第${t.year_index}年)` : '';
                 html += `<label class="task-item">
-                    <input type="checkbox" class="task-checkbox" value="${t.id}">
+                    <input type="checkbox" class="fee-only-check" data-task-id="${t.id}">
                     <span class="task-info">${escapeHtml(t.fee_type)}${yearLabel} - 截止 ${escapeHtml(t.due_date)}</span>
                     <span class="task-amount">¥${t.amount}</span>
                 </label>`;
             });
-            listEl.innerHTML = html;
-            document.getElementById('btnConfirmTasks').disabled = false;
+            html += `<div style="margin-top:8px;"><button class="btn btn-primary btn-sm" onclick="confirmFeeOnlyTasks()">确认缴费</button></div>`;
+            html += `</div>`;
         }
-        // 存储 patentId 供 confirmTasksComplete 使用
-        document.getElementById('taskModal').dataset.patentId = patentId;
-        document.getElementById('taskModal').classList.remove('hidden');
+
+        if (filteredTrans.length === 0 && feeOnly.length === 0) {
+            html += '<p class="text-muted text-center" style="padding:24px;">当前无待办事项</p>';
+        }
+
+        document.getElementById('taskModalBody').innerHTML = html;
+        modal.classList.remove('hidden');
     } catch (err) {
-        await showAlertModal('加载待办数据失败：' + err.message);
+        await showAlertModal('加载失败：' + err.message);
     }
 }
 
 /**
- * 函数名：confirmTasksComplete
- * 作用：将选中的待办标记为已缴费，并根据规则自动生成下一个待办
+ * 函数名：uploadTaskAttachment
+ * 作用：在完成待办弹窗内直接上传附件，上传后更新界面状态
  */
-async function confirmTasksComplete() {
-    const checked = document.querySelectorAll('.task-checkbox:checked');
-    if (checked.length === 0) {
-        await showAlertModal('请至少选择一项待办事项');
+async function uploadTaskAttachment(patentId, idx) {
+    const fileInput = document.querySelector(`.task-file-input[data-idx="${idx}"]`);
+    if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+        await showAlertModal('请先选择文件');
         return;
     }
-    if (!await showConfirmModal(`确认完成选中的 ${checked.length} 项待办？`)) return;
+    const file = fileInput.files[0];
+    const modal = document.getElementById('taskModal');
+    const transitions = JSON.parse(modal.dataset.transitions || '[]');
+    const t = transitions[idx];
+    if (!t || !t.attachment_type) return;
+
+    const allowedExts = ['.pdf', '.png', '.jpg', '.jpeg', '.gif'];
+    const ext = '.' + file.name.split('.').pop().toLowerCase();
+    if (!allowedExts.includes(ext)) {
+        await showAlertModal('仅支持 PDF 和图片文件');
+        return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+        await showAlertModal('文件大小不能超过 20MB');
+        return;
+    }
 
     try {
-        const ids = Array.from(checked).map(cb => parseInt(cb.value));
-        // 先查询任务详情（fee_type、patent_id），用于后续自动生成
-        const placeholders = ids.map(() => '?').join(',');
-        const tasks = await window.patentAPI.dbQuery(
-            "SELECT id, patent_id, fee_type, year_index FROM fee_tasks WHERE id IN (" + placeholders + ")",
-            ids
+        const reader = new FileReader();
+        const base64Data = await new Promise((resolve, reject) => {
+            reader.onload = () => resolve(reader.result.split(',')[1]);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+        await window.patentAPI.uploadFile(patentId, file.name, t.attachment_type, base64Data);
+
+        // 替换上传行为 ✓ 已完成
+        const card = document.querySelector(`.transition-card[data-idx="${idx}"]`);
+        if (card) {
+            const stepDiv = card.querySelector('.transition-step');
+            if (stepDiv) {
+                stepDiv.outerHTML = `<div class="transition-step done">✓ ${escapeHtml(t.attachment_type)} 已上传</div>`;
+            }
+            // 启用执行按钮
+            const execBtn = card.querySelector('.transition-execute');
+            if (execBtn) execBtn.disabled = false;
+        }
+        document.getElementById(`taskStepStatus_${idx}`).textContent = '上传成功 ✓';
+    } catch (err) {
+        document.getElementById(`taskStepStatus_${idx}`).textContent = '上传失败';
+        await showAlertModal('上传失败：' + err.message);
+    }
+}
+
+/**
+ * 函数名：updateExecuteBtn
+ * 作用：根据复选框状态更新执行按钮
+ */
+function updateExecuteBtn(idx) {
+    const card = document.querySelector(`.transition-card[data-idx="${idx}"]`);
+    if (!card) return;
+    const feeCheck = card.querySelector('.task-fee-check');
+    const btn = document.getElementById(`execBtn_${idx}`);
+    if (!btn) return;
+    btn.disabled = feeCheck && !feeCheck.checked;
+}
+
+/**
+ * 函数名：executeTransition
+ * 作用：执行状态流转——校验条件 → 标记缴费 → 变更状态 → 生成后续任务
+ */
+async function executeTransition(patentId, idx) {
+    const modal = document.getElementById('taskModal');
+    const transitions = JSON.parse(modal.dataset.transitions || '[]');
+    const t = transitions[idx];
+    if (!t) return;
+
+    const card = document.querySelector(`.transition-card[data-idx="${idx}"]`);
+
+    // 校验：必需附件是否已上传
+    if (t.attachment_required) {
+        // 检查卡片中是否已有 done 标记，或数据库已有记录
+        const hasDone = card && card.querySelector('.transition-step.done');
+        if (!hasDone) {
+            const atts = await window.patentAPI.dbQuery(
+                "SELECT id FROM attachments WHERE patent_id = ? AND file_type = ?",
+                [patentId, t.attachment_type]
+            );
+            if (atts.length === 0) {
+                await showAlertModal(`请先上传 ${t.attachment_type}`);
+                return;
+            }
+        }
+    }
+
+    if (!await showConfirmModal(`确认执行：${t.action} → ${t.next_status}？`)) return;
+
+    try {
+        // 1) 缴费（通知授权→专利权生效，授权登记费需先缴）
+        if (t.current_status === '通知授权' && t.next_status === '专利权生效') {
+            if (card) {
+                const feeCheck = card.querySelector('.task-fee-check');
+                if (feeCheck && feeCheck.checked) {
+                    const taskId = parseInt(feeCheck.dataset.taskId);
+                    await window.patentAPI.dbRun(
+                        "UPDATE fee_tasks SET status = '已缴费', paid_date = date('now','localtime') WHERE id = ?",
+                        [taskId]
+                    );
+                }
+            }
+        }
+
+        // 2) 变更状态
+        await window.patentAPI.dbRun(
+            "UPDATE patents SET status = ?, updated_at = datetime('now','localtime') WHERE id = ?",
+            [t.next_status, patentId]
         );
 
-        // 更新状态为已缴费
-        for (const id of ids) {
-            await window.patentAPI.dbRun(
-                "UPDATE fee_tasks SET status = '已缴费', paid_date = date('now','localtime') WHERE id = ?",
-                [id]
-            );
-        }
+        // 3) 状态变更联动（生成新状态的费用任务）
+        await handleStatusChange(patentId, t.next_status);
 
-        // 按专利分组已完成的费用类型，触发后续任务自动生成
-        const patentActions = {};
-        tasks.forEach(t => {
-            if (!patentActions[t.patent_id]) patentActions[t.patent_id] = new Set();
-            const key = t.fee_type + (t.year_index ? '_' + t.year_index : '');
-            patentActions[t.patent_id].add(key);
-        });
-        for (const pidStr of Object.keys(patentActions)) {
-            await generateNextTasks(parseInt(pidStr), patentActions[pidStr]);
-        }
+        // 4) 操作日志
+        await window.patentAPI.dbRun(
+            "INSERT INTO operation_logs (patent_id, action_type, description) VALUES (?, '状态变更', ?)",
+            [patentId, `完成待办"${t.action}"，状态变更为"${t.next_status}"`]
+        );
 
-        await showAlertModal(`已完成 ${ids.length} 项待办`);
-        document.getElementById('taskModal').classList.add('hidden');
-        // 备份数据库
-        await window.patentAPI.backupDatabase().catch(() => {});
+        modal.classList.add('hidden');
+        await showAlertModal(`状态已变更为"${t.next_status}"`);
         loadPatentList();
+        if (currentDetailPatentId === patentId) showPatentDetail(patentId);
     } catch (err) {
         await showAlertModal('操作失败：' + err.message);
     }
 }
 
 /**
- * 函数名：generateNextTasks
- * 作用：根据已完成的费用类型，自动生成下一个待办任务并记录日志
- * 参数：
- *   - patentId - number - 专利ID
- *   - completedActions - Set<string> - 已完成的费用类型集合（如 '年费_2', '授权登记费'）
+ * 函数名：confirmFeeOnlyTasks
+ * 作用：处理独立缴费任务（年费等的缴费，不触发状态流转）
  */
-async function generateNextTasks(patentId, completedActions) {
-    const patents = await window.patentAPI.dbQuery("SELECT * FROM patents WHERE id = ?", [patentId]);
-    if (patents.length === 0) return;
-    const p = patents[0];
-
-    // 1) 授权登记费 → 专利权生效 + 生成首年年费
-    if (completedActions.has('授权登记费') && p.apply_date) {
-        await window.patentAPI.dbRun(
-            "UPDATE patents SET status = '专利权生效', authorize_date = COALESCE(authorize_date, date('now','localtime')), updated_at = datetime('now','localtime') WHERE id = ?",
-            [patentId]
-        );
-        const dueDate = calculateFeeDueDate(p.apply_date, 1);
-        const amount = getAnnualFeeAmount(p.patent_type, 1);
-        const finalAmount = Math.round(amount * getFeeReductionRate(p.fee_reduction));
-        await window.patentAPI.dbRun(
-            "INSERT INTO fee_tasks (patent_id, fee_type, year_index, amount, due_date, status) VALUES (?, '年费', 1, ?, ?, '待缴费')",
-            [patentId, finalAmount, dueDate]
-        );
-        await window.patentAPI.dbRun(
-            "INSERT INTO operation_logs (patent_id, action_type, description) VALUES (?, '状态变更', ?)",
-            [patentId, `授权登记费缴纳完成，专利状态自动变更为"专利权生效"，生成首年年费任务（¥${finalAmount}，截止${dueDate}）`]
-        );
+async function confirmFeeOnlyTasks() {
+    const checked = document.querySelectorAll('.fee-only-check:checked');
+    if (checked.length === 0) {
+        await showAlertModal('请至少选择一项待缴费任务');
+        return;
     }
+    if (!await showConfirmModal(`确认完成选中的 ${checked.length} 项缴费？`)) return;
 
-    // 2) 年费 → 自动生成下一年年费
-    for (const action of completedActions) {
-        if (action.startsWith('年费')) {
-            const parts = action.split('_');
-            const completedYear = parts.length > 1 ? parseInt(parts[1]) : null;
-            if (!completedYear || !p.apply_date) continue;
+    try {
+        const ids = Array.from(checked).map(cb => parseInt(cb.dataset.taskId));
+        // 查询任务详情
+        const placeholders = ids.map(() => '?').join(',');
+        const tasks = await window.patentAPI.dbQuery(
+            "SELECT id, patent_id, fee_type, year_index FROM fee_tasks WHERE id IN (" + placeholders + ")", ids
+        );
 
-            const nextYear = completedYear + 1;
-            const maxYear = getMaxYearForType(p.patent_type);
-            if (nextYear > maxYear) continue;
-
-            // 检查下一年年费是否已存在（避免重复生成）
-            const existing = await window.patentAPI.dbQuery(
-                "SELECT id FROM fee_tasks WHERE patent_id = ? AND fee_type = '年费' AND year_index = ? AND status = '待缴费'",
-                [patentId, nextYear]
-            );
-            if (existing.length > 0) continue;
-
-            const dueDate = calculateFeeDueDate(p.apply_date, nextYear);
-            const amount = getAnnualFeeAmount(p.patent_type, nextYear);
-            const finalAmount = Math.round(amount * getFeeReductionRate(p.fee_reduction));
+        // 标记已缴费
+        for (const id of ids) {
             await window.patentAPI.dbRun(
-                "INSERT INTO fee_tasks (patent_id, fee_type, year_index, amount, due_date, status) VALUES (?, '年费', ?, ?, ?, '待缴费')",
-                [patentId, nextYear, finalAmount, dueDate]
-            );
-            await window.patentAPI.dbRun(
-                "INSERT INTO operation_logs (patent_id, action_type, description) VALUES (?, '任务生成', ?)",
-                [patentId, `第${completedYear}年年费缴纳完成，自动生成第${nextYear}年年费任务（¥${finalAmount}，截止${dueDate}）`]
+                "UPDATE fee_tasks SET status = '已缴费', paid_date = date('now','localtime') WHERE id = ?", [id]
             );
         }
+
+        // 按专利分组，年费→生成下一年
+        const patentActions = {};
+        tasks.forEach(t => {
+            if (!patentActions[t.patent_id]) patentActions[t.patent_id] = new Set();
+            patentActions[t.patent_id].add(t.fee_type + (t.year_index ? '_' + t.year_index : ''));
+        });
+
+        for (const pidStr of Object.keys(patentActions)) {
+            const pid = parseInt(pidStr);
+            const pList = await window.patentAPI.dbQuery("SELECT * FROM patents WHERE id = ?", [pid]);
+            if (pList.length === 0) continue;
+            const p = pList[0];
+
+            for (const action of patentActions[pid]) {
+                if (action.startsWith('年费')) {
+                    const parts = action.split('_');
+                    const completedYear = parts.length > 1 ? parseInt(parts[1]) : null;
+                    if (!completedYear || !p.apply_date) continue;
+                    const nextYear = completedYear + 1;
+                    const maxYear = getMaxYearForType(p.patent_type);
+                    if (nextYear > maxYear) continue;
+
+                    const existing = await window.patentAPI.dbQuery(
+                        "SELECT id FROM fee_tasks WHERE patent_id = ? AND fee_type = '年费' AND year_index = ? AND status = '待缴费'",
+                        [pid, nextYear]
+                    );
+                    if (existing.length > 0) continue;
+
+                    const dueDate = calculateFeeDueDate(p.apply_date, nextYear);
+                    const amount = getAnnualFeeAmount(p.patent_type, nextYear);
+                    const finalAmount = Math.round(amount * getFeeReductionRate(p.fee_reduction));
+                    await window.patentAPI.dbRun(
+                        "INSERT INTO fee_tasks (patent_id, fee_type, year_index, amount, due_date, status) VALUES (?, '年费', ?, ?, ?, '待缴费')",
+                        [pid, nextYear, finalAmount, dueDate]
+                    );
+                    await window.patentAPI.dbRun(
+                        "INSERT INTO operation_logs (patent_id, action_type, description) VALUES (?, '任务生成', ?)",
+                        [pid, `第${completedYear}年年费已缴，自动生成第${nextYear}年年费（¥${finalAmount}，截止${dueDate}）`]
+                    );
+                }
+            }
+        }
+
+        await showAlertModal(`已完成 ${ids.length} 项缴费`);
+        document.getElementById('taskModal').classList.add('hidden');
+        await window.patentAPI.backupDatabase().catch(() => {});
+        loadPatentList();
+    } catch (err) {
+        await showAlertModal('操作失败：' + err.message);
     }
 }
 
@@ -1286,6 +1603,110 @@ async function renderDetailLogs(id) {
         html += `<tr><td>${escapeHtml(l.action_type)}</td><td>${escapeHtml(l.description || '-')}</td><td>${l.created_at || '-'}</td></tr>`;
     });
     body.innerHTML = html;
+}
+
+// ============================================
+// 附件管理
+// ============================================
+
+/**
+ * 函数名：renderDetailAttachments
+ * 作用：查询并渲染附件列表
+ */
+async function renderDetailAttachments(patentId) {
+    const body = document.getElementById('attBody');
+    try {
+        const atts = await window.patentAPI.dbQuery(
+            "SELECT id, file_name, file_path, file_type, uploaded_at FROM attachments WHERE patent_id = ? ORDER BY uploaded_at DESC",
+            [patentId]
+        );
+        if (atts.length === 0) {
+            body.innerHTML = '<tr><td colspan="4" class="text-center text-muted">暂无附件</td></tr>';
+            return;
+        }
+        let html = '';
+        atts.forEach(a => {
+            const fileUrl = '/' + a.file_path;
+            const isImage = /\.(png|jpg|jpeg|gif)$/i.test(a.file_path);
+            const previewHtml = isImage
+                ? `<a href="${fileUrl}" target="_blank" class="att-filename-link">${escapeHtml(a.file_name)}</a>`
+                : `<a href="${fileUrl}" target="_blank" class="att-filename-link">${escapeHtml(a.file_name)}</a>`;
+            html += `<tr>
+                <td class="att-filename">${previewHtml}</td>
+                <td>${escapeHtml(a.file_type || '-')}</td>
+                <td>${a.uploaded_at || '-'}</td>
+                <td><button class="att-delete-btn" onclick="deleteAttachment(${a.id})">🗑 删除</button></td>
+            </tr>`;
+        });
+        body.innerHTML = html;
+    } catch (err) {
+        body.innerHTML = `<tr><td colspan="4" class="text-center text-muted">加载失败：${escapeHtml(err.message)}</td></tr>`;
+    }
+}
+
+/**
+ * 函数名：uploadAttachment
+ * 作用：上传附件（读取文件 → base64 → 调 API → 刷新列表）
+ */
+async function uploadAttachment() {
+    const fileInput = document.getElementById('attFileInput');
+    const fileType = document.getElementById('attFileType').value;
+    const file = fileInput.files[0];
+    if (!file) { await showAlertModal('请先选择文件'); return; }
+    if (!fileType) { await showAlertModal('请选择文件类型'); return; }
+    if (!currentDetailPatentId) { await showAlertModal('未选择专利'); return; }
+
+    // 校验文件类型
+    const allowedExts = ['.pdf', '.png', '.jpg', '.jpeg', '.gif'];
+    const ext = '.' + file.name.split('.').pop().toLowerCase();
+    if (!allowedExts.includes(ext)) {
+        await showAlertModal('仅支持 PDF 和图片文件（png/jpg/gif）');
+        return;
+    }
+    // 文件大小限制（20MB）
+    if (file.size > 20 * 1024 * 1024) {
+        await showAlertModal('文件大小不能超过 20MB');
+        return;
+    }
+
+    try {
+        // 读取文件为 base64
+        const reader = new FileReader();
+        const base64Data = await new Promise((resolve, reject) => {
+            reader.onload = () => {
+                const result = reader.result;
+                // 去掉 data:xxx;base64, 前缀
+                const base64 = result.split(',')[1];
+                resolve(base64);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+
+        await window.patentAPI.uploadFile(currentDetailPatentId, file.name, fileType, base64Data);
+        await showAlertModal('上传成功');
+        // 清空文件选择和类型
+        fileInput.value = '';
+        document.getElementById('attFileType').value = '';
+        // 刷新列表
+        renderDetailAttachments(currentDetailPatentId);
+    } catch (err) {
+        await showAlertModal('上传失败：' + err.message);
+    }
+}
+
+/**
+ * 函数名：deleteAttachment
+ * 作用：删除附件（确认 → 调 API → 刷新列表）
+ */
+async function deleteAttachment(id) {
+    if (!await showConfirmModal('确认删除该附件？')) return;
+    try {
+        await window.patentAPI.deleteAttachment(id);
+        if (currentDetailPatentId) renderDetailAttachments(currentDetailPatentId);
+    } catch (err) {
+        await showAlertModal('删除失败：' + err.message);
+    }
 }
 
 // ============================================

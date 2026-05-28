@@ -903,6 +903,8 @@ body {
     color: #f5222d;
     font-weight: 500;
 }
+.urgent-task .urgent-line1.urgent-att { color: #fa8c16; }
+.urgent-task .urgent-line1.urgent-confirm { color: #1890ff; }
 .urgent-none {
     color: #ccc;
     font-size: 12px;
@@ -1071,6 +1073,49 @@ body {
     color: #f5222d;
 }
 
+/* 完成待办 - 流转卡片 */
+#taskModalBody { padding: 0 24px 16px; max-height: 60vh; overflow-y: auto; }
+.task-status-bar { font-size: 14px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+.transition-card {
+    border: 1px solid #e8e8e8;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 12px;
+    background: #fafafa;
+}
+.transition-summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    margin-bottom: 12px;
+}
+.transition-arrow { color: #1890ff; font-weight: bold; }
+.transition-next-status { color: #1890ff; font-weight: 500; }
+.transition-step {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    margin: 4px 0;
+    background: #fff;
+    border-radius: 6px;
+    border: 1px solid #f0f0f0;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.transition-step.done { background: #f6ffed; border-color: #b7eb8f; color: #52c41a; }
+.step-label { font-size: 13px; color: #333; }
+.step-action { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.step-action input[type="file"] { font-size: 12px; max-width: 200px; }
+.step-action label { font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+.required-mark { color: #f5222d; }
+.transition-execute { margin-top: 8px; }
+.transition-execute:disabled { opacity: 0.4; cursor: not-allowed; }
+.step-status { font-size: 12px; color: #52c41a; }
+.tc-feesection { margin-top: 16px; padding-top: 12px; border-top: 1px dashed #e8e8e8; }
+.tc-feesection-title { font-size: 13px; color: #666; margin-bottom: 8px; }
+
 /* ============================================ */
 /* 专利详情页（右侧抽屉） */
 /* ============================================ */
@@ -1189,6 +1234,47 @@ body {
 /* 标签内容 */
 .pd-tab-content { display: none; }
 .pd-tab-content.active { display: block; }
+
+/* 附件管理 */
+.att-upload-bar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    background: #fff;
+    border-radius: 8px;
+    padding: 12px 16px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+    flex-wrap: wrap;
+}
+.att-file-input {
+    flex: 1;
+    min-width: 200px;
+    padding: 4px 0;
+    font-size: 13px;
+}
+.att-type-select {
+    width: 200px;
+    padding: 6px 10px;
+    border: 1px solid #d9d9d9;
+    border-radius: 6px;
+    font-size: 13px;
+    outline: none;
+    background: #fff;
+    cursor: pointer;
+}
+.att-type-select:focus { border-color: #1890ff; }
+.att-filename { font-size: 13px; color: #333; }
+.att-filename-link { color: #1890ff; text-decoration: none; }
+.att-filename-link:hover { text-decoration: underline; }
+.att-delete-btn {
+    color: #f5222d;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    padding: 2px 8px;
+}
+.att-delete-btn:hover { opacity: 0.7; }
 
 /* 基本信息网格（查看模式） */
 .pd-grid {
