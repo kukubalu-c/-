@@ -96,7 +96,10 @@ function serveStaticFile(res, filePath) {
             return;
         }
         const ext = path.extname(filePath).toLowerCase();
-        res.writeHead(200, { 'Content-Type': getMimeType(ext) });
+        res.writeHead(200, {
+            'Content-Type': getMimeType(ext),
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+        });
         res.end(data);
     });
 }
@@ -265,7 +268,7 @@ async function handleApiRequest(req, res) {
 function startHttpServer() {
     const server = http.createServer((req, res) => {
         const parsedUrl = url.parse(req.url);
-        const pathname = parsedUrl.pathname;
+        const pathname = decodeURI(parsedUrl.pathname);
 
         // API 请求转发
         if (pathname.startsWith('/api/')) {

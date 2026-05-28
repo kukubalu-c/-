@@ -202,7 +202,11 @@
                             </div>
                             <div class="search-row">
                                 <div class="search-item">
-                                    <label>申请日期</label>
+                                    <div class="date-type-segmented">
+                                        <input type="radio" name="dateType" id="dtApply" value="apply_date" checked><label for="dtApply">申请日期</label>
+                                        <input type="radio" name="dateType" id="dtDue" value="due_date"><label for="dtDue">截止日期</label>
+                                        <input type="radio" name="dateType" id="dtAuth" value="authorize_date"><label for="dtAuth">授权日期</label>
+                                    </div>
                                     <div class="date-range">
                                         <input type="date" id="sDateFrom">
                                         <span>至</span>
@@ -468,8 +472,8 @@
 
                 <div class="pd-bottom-actions">
                     <button class="btn btn-primary btn-sm" id="btnDetailCompleteTask">✔ 完成待办</button>
-                    <button class="btn btn-default btn-sm" id="btnDetailEdit">✏️ 编辑</button>
-                    <button class="btn btn-default btn-sm" id="btnDetailDelete" style="color:#f5222d;border-color:#f5222d;">🗑 删除</button>
+                    <button class="btn btn-default btn-sm" id="btnDetailEdit">编辑</button>
+                    <button class="btn btn-default btn-sm" id="btnDetailDelete">删除</button>
                 </div>
             </div>
         </div>

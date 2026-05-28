@@ -207,6 +207,18 @@ class Database {
             )
         `);
 
+        // === 手动紧迫任务表：用户在编辑界面手动添加的非费用紧迫任务 ===
+        this.db.run(`
+            CREATE TABLE IF NOT EXISTS pending_urgent_tasks (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                patent_id       INTEGER NOT NULL,             -- 关联专利ID
+                task_desc       TEXT NOT NULL,                -- 显示文字
+                task_type       TEXT DEFAULT '',               -- 类型标识
+                created_at      TEXT DEFAULT (datetime('now','localtime')),
+                FOREIGN KEY (patent_id) REFERENCES patents(id)
+            )
+        `);
+
         this.save();
 
         // 第5步：检查是否需要填充种子数据

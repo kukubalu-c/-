@@ -630,6 +630,41 @@ body {
     color: #bbb;
     font-size: 12px;
 }
+
+/* 日期类型分段选择器 */
+.date-type-segmented {
+    display: inline-flex;
+    border: 1px solid #d9d9d9;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 6px;
+}
+.date-type-segmented input[type="radio"] {
+    display: none;
+}
+.date-type-segmented label {
+    display: inline-block;
+    padding: 1px 10px;
+    font-size: 12px;
+    line-height: 22px;
+    color: #666;
+    cursor: pointer;
+    background: #fff;
+    border-right: 1px solid #d9d9d9;
+    transition: all 0.15s;
+    user-select: none;
+}
+.date-type-segmented label:last-child {
+    border-right: none;
+}
+.date-type-segmented label:hover {
+    background: #f5f5f5;
+}
+.date-type-segmented input[type="radio"]:checked + label {
+    background: #1890ff;
+    color: #fff;
+    border-color: #1890ff;
+}
 .search-actions {
     display: flex;
     gap: 8px;

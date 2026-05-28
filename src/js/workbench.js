@@ -545,7 +545,8 @@ async function loadPatentList() {
         status: document.getElementById('fStatus').value,
         warning: document.getElementById('fWarning').value,
         date_from: document.getElementById('sDateFrom').value,
-        date_to: document.getElementById('sDateTo').value
+        date_to: document.getElementById('sDateTo').value,
+        date_type: document.querySelector('input[name="dateType"]:checked')?.value || 'apply_date'
     };
 
     const { where, params } = buildWhereClause(currentFilters);
@@ -670,13 +671,31 @@ function buildWhereClause(filters) {
         conditions.push("status = ?");
         params.push(filters.status);
     }
-    if (filters.date_from) {
-        conditions.push("apply_date >= ?");
-        params.push(filters.date_from);
-    }
-    if (filters.date_to) {
-        conditions.push("apply_date <= ?");
-        params.push(filters.date_to);
+    const dateType = filters.date_type || 'apply_date';
+    if (dateType === 'due_date') {
+        // 截止日期：关联 fee_tasks 表
+        const subConds = [];
+        if (filters.date_from) {
+            subConds.push("due_date >= ?");
+            params.push(filters.date_from);
+        }
+        if (filters.date_to) {
+            subConds.push("due_date <= ?");
+            params.push(filters.date_to);
+        }
+        if (subConds.length > 0) {
+            conditions.push("EXISTS (SELECT 1 FROM fee_tasks WHERE patent_id = patents.id AND " + subConds.join(" AND ") + ")");
+        }
+    } else {
+        // 申请日期或授权日期：直接查 patents 表字段
+        if (filters.date_from) {
+            conditions.push(dateType + " >= ?");
+            params.push(filters.date_from);
+        }
+        if (filters.date_to) {
+            conditions.push(dateType + " <= ?");
+            params.push(filters.date_to);
+        }
     }
 
     return {
@@ -732,6 +751,17 @@ async function computeWarningMap(patents) {
     atts.forEach(a => {
         if (!attByPatent[a.patent_id]) attByPatent[a.patent_id] = new Set();
         attByPatent[a.patent_id].add(a.file_type);
+    });
+
+    // 4) 手动添加的其他紧迫任务
+    const pendingTasks = patentIds.length > 0 ? await window.patentAPI.dbQuery(
+        "SELECT id, patent_id, task_desc FROM pending_urgent_tasks WHERE patent_id IN (" + placeholders + ")",
+        patentIds
+    ) : [];
+    const pendingByPatent = {};
+    pendingTasks.forEach(pt => {
+        if (!pendingByPatent[pt.patent_id]) pendingByPatent[pt.patent_id] = [];
+        pendingByPatent[pt.patent_id].push(pt);
     });
 
     const today = new Date();
@@ -799,6 +829,12 @@ async function computeWarningMap(patents) {
         else if (pendingConfirm) {
             urgent = { type: 'confirm', text: `待确认：${pendingConfirm.action}` };
             warning = { level: 'none', days: 0 };
+        }
+        // 5) 手动添加的其他紧迫任务（最低优先级）
+        else if (pendingByPatent[pid] && pendingByPatent[pid].length > 0) {
+            const pt = pendingByPatent[pid][0];
+            urgent = { type: 'attachment', text: pt.task_desc };
+            warning = { level: 'urgent', days: 0 };
         }
 
         urgentMap[pid] = urgent || null;
@@ -1793,6 +1829,29 @@ function enterEditMode() {
             editGrid.insertAdjacentHTML('beforeend', urgentHtml);
         });
 
+        // 非费用紧迫任务（手动添加）
+        window.patentAPI.dbQuery(
+            "SELECT DISTINCT attachment_type FROM status_transitions WHERE attachment_type != '' ORDER BY attachment_type"
+        ).then(types => {
+            let otherHtml = '<div class="pd-edit-field" style="margin-top:12px;"><label style="min-width:70px;">待办事项</label>';
+            otherHtml += '<select id="selPendingTask" data-key="urgent_pending_task" style="min-width:300px;flex:1;"><option value="">- 选择 -</option>';
+            types.forEach(t => {
+                otherHtml += `<option value="${escapeHtml(t.attachment_type)}">待上传：${escapeHtml(t.attachment_type)}</option>`;
+            });
+            otherHtml += '</select></div>';
+            editGrid.insertAdjacentHTML('beforeend', otherHtml);
+            // 预选已保存的值
+            window.patentAPI.dbQuery(
+                "SELECT task_desc FROM pending_urgent_tasks WHERE patent_id = ? ORDER BY created_at DESC LIMIT 1",
+                [currentDetailPatentId]
+            ).then(tasks => {
+                if (tasks.length > 0) {
+                    const savedType = tasks[0].task_desc.replace('待上传：', '');
+                    document.getElementById('selPendingTask').value = savedType;
+                }
+            });
+        });
+
         viewGrid.classList.add('hidden');
         editGrid.classList.remove('hidden');
         actions.classList.remove('hidden');
@@ -1872,6 +1931,31 @@ async function savePatentEdit() {
                     [currentDetailPatentId, urgentFeeType, urgentYearIndex, urgentAmount, urgentDueDate]
                 );
             }
+        }
+        // 保存非费用紧迫任务
+        const pendingTaskType = data.urgent_pending_task;
+        if (pendingTaskType) {
+            const desc = '待上传：' + pendingTaskType;
+            const existing = await window.patentAPI.dbQuery(
+                "SELECT id FROM pending_urgent_tasks WHERE patent_id = ? ORDER BY created_at DESC LIMIT 1",
+                [currentDetailPatentId]
+            );
+            if (existing.length > 0) {
+                await window.patentAPI.dbRun(
+                    "UPDATE pending_urgent_tasks SET task_desc = ? WHERE id = ?",
+                    [desc, existing[0].id]
+                );
+            } else {
+                await window.patentAPI.dbRun(
+                    "INSERT INTO pending_urgent_tasks (patent_id, task_desc, task_type) VALUES (?, ?, 'attachment')",
+                    [currentDetailPatentId, desc]
+                );
+            }
+        } else {
+            await window.patentAPI.dbRun(
+                "DELETE FROM pending_urgent_tasks WHERE patent_id = ?",
+                [currentDetailPatentId]
+            );
         }
         await window.patentAPI.dbRun(
             "INSERT INTO operation_logs (patent_id, action_type, description) VALUES (?, '编辑', '修改专利基本信息')",
