@@ -17,6 +17,7 @@ function initDashboard() {
         dashboardInited = true;
         renderPieChart();
         renderBarChart(1);
+        renderStats();
         // 预算区间查询控件绑定
         const btn = document.getElementById('btnQueryBudget');
         const startInput = document.getElementById('budgetMonthStart');
@@ -302,11 +303,11 @@ async function renderBudgetChart(startMonth, endMonth) {
 
     try {
         const fees = await window.patentAPI.dbQuery(
-            "SELECT fee_type, SUM(amount) as total, COUNT(*) as count FROM fee_tasks WHERE strftime('%Y-%m', due_date) BETWEEN ? AND ? GROUP BY fee_type ORDER BY total DESC",
+            "SELECT fee_type, SUM(amount) as total, COUNT(*) as count FROM fee_tasks WHERE strftime('%Y-%m', due_date) BETWEEN ? AND ? AND EXISTS (SELECT 1 FROM patents WHERE id = patent_id) GROUP BY fee_type ORDER BY total DESC",
             [startMonth, endMonth]
         );
         const totalRow = await window.patentAPI.dbQuery(
-            "SELECT SUM(amount) as grand_total FROM fee_tasks WHERE strftime('%Y-%m', due_date) BETWEEN ? AND ?",
+            "SELECT SUM(amount) as grand_total FROM fee_tasks WHERE strftime('%Y-%m', due_date) BETWEEN ? AND ? AND EXISTS (SELECT 1 FROM patents WHERE id = patent_id)",
             [startMonth, endMonth]
         );
         const grandTotal = totalRow.length > 0 ? totalRow[0].grand_total || 0 : 0;
@@ -318,10 +319,15 @@ async function renderBudgetChart(startMonth, endMonth) {
 
         let html = `<div style="display:flex;gap:24px;align-items:flex-start;">
             <table class="budget-breakdown" style="flex:1;">
-                <thead><tr><th>费用类型</th><th>笔数</th><th>金额（元）</th></tr></thead>
+                <thead><tr><th>费用类型</th><th>笔数</th><th>金额（元）</th><th>操作</th></tr></thead>
                 <tbody>`;
         fees.forEach(f => {
-            html += `<tr><td>${f.fee_type}</td><td>${f.count}</td><td>${(f.total || 0).toLocaleString()}</td></tr>`;
+            html += `<tr>
+                <td>${f.fee_type}</td>
+                <td>${f.count}</td>
+                <td>${(f.total || 0).toLocaleString()}</td>
+                <td><a class="detail-link" data-fee-type="${f.fee_type}" data-start="${startMonth}" data-end="${endMonth}">查看详情</a></td>
+            </tr>`;
         });
         html += `</tbody></table>
             <div style="text-align:right;flex-shrink:0;">
@@ -330,8 +336,116 @@ async function renderBudgetChart(startMonth, endMonth) {
             </div>
         </div>`;
         container.innerHTML = html;
+        // 委托点击"查看详情"事件
+        container.addEventListener('click', function onClickDetail(e) {
+            const link = e.target.closest('.detail-link');
+            if (link) {
+                loadFeeDetail(link.dataset.feeType, link.dataset.start, link.dataset.end);
+            }
+        });
     } catch (err) {
         container.innerHTML = `<p class="text-center text-muted" style="padding:40px 0;">查询失败：${err.message}</p>`;
+    }
+}
+
+// ============================================
+// 费用明细弹窗
+// ============================================
+
+/**
+ * 函数名：loadFeeDetail
+ * 作用：查询指定费用类型的逐条明细，弹窗显示
+ */
+async function loadFeeDetail(feeType, startMonth, endMonth) {
+    const modal = document.getElementById('feeDetailModal');
+    const title = document.getElementById('feeDetailTitle');
+    const body = document.getElementById('feeDetailBody');
+    if (!modal || !title || !body) return;
+
+    title.textContent = `${feeType} 明细  ${startMonth} ~ ${endMonth}`;
+    body.innerHTML = '<p class="text-center text-muted" style="padding:40px 0;">加载中...</p>';
+    modal.classList.remove('hidden');
+
+    try {
+        const rows = await window.patentAPI.dbQuery(
+            `SELECT p.patent_no, p.patent_name, f.year_index, f.amount,
+                    f.due_date, f.status, f.paid_date
+             FROM fee_tasks f LEFT JOIN patents p ON f.patent_id = p.id
+             WHERE f.fee_type = ? AND strftime('%Y-%m', f.due_date) BETWEEN ? AND ?
+             ORDER BY f.status, f.due_date, p.patent_no`,
+            [feeType, startMonth, endMonth]
+        );
+
+        if (rows.length === 0) {
+            body.innerHTML = '<p class="text-center text-muted" style="padding:40px 0;">暂无数据</p>';
+            return;
+        }
+
+        let totalAmount = 0;
+        let html = `<table class="budget-breakdown fee-detail-table">
+            <thead><tr>
+                <th>专利号</th><th>专利名称</th><th>年度</th><th>金额（元）</th><th>截止日期</th><th>状态</th>
+            </tr></thead><tbody>`;
+        rows.forEach(r => {
+            totalAmount += r.amount || 0;
+            const yearLabel = r.year_index ? `第${r.year_index}年` : '-';
+            const patentNo = r.patent_no || '<span style="color:#999;">(专利已不存在)</span>';
+            const patentName = r.patent_name || '';
+            html += `<tr>
+                <td style="font-family:Consolas,monospace;">${patentNo}</td>
+                <td>${patentName}</td>
+                <td>${yearLabel}</td>
+                <td style="text-align:right;">${(r.amount || 0).toLocaleString()}</td>
+                <td>${r.due_date || '-'}</td>
+                <td>${r.status || '-'}</td>
+            </tr>`;
+        });
+        html += `</tbody>
+            <tfoot><tr style="font-weight:600;">
+                <td colspan="2">合计</td>
+                <td>${rows.length}笔</td>
+                <td style="text-align:right;">${totalAmount.toLocaleString()}</td>
+                <td colspan="2"></td>
+            </tr></tfoot></table>`;
+        body.innerHTML = html;
+    } catch (err) {
+        body.innerHTML = `<p class="text-center text-muted" style="padding:40px 0;">查询失败：${err.message}</p>`;
+    }
+}
+
+// 弹窗关闭事件
+document.addEventListener('click', function(e) {
+    const modal = document.getElementById('feeDetailModal');
+    if (!modal) return;
+    // 点击关闭按钮或遮罩背景
+    if (e.target.id === 'feeDetailClose' || e.target === modal) {
+        modal.classList.add('hidden');
+    }
+});
+
+// ============================================
+// 统计概览卡片
+// ============================================
+
+/**
+ * 函数名：renderStats
+ * 作用：查询统计概览数据，更新四个白色卡片
+ */
+async function renderStats() {
+    try {
+        const [patentCnt, overdueCnt, feePending, otherPending, monthlyCnt] = await Promise.all([
+            window.patentAPI.dbQuery("SELECT COUNT(*) as cnt FROM patents WHERE is_deleted = 0"),
+            window.patentAPI.dbQuery("SELECT COUNT(*) as cnt FROM fee_tasks WHERE status = '待缴费' AND due_date < date('now','localtime') AND EXISTS (SELECT 1 FROM patents WHERE id = patent_id)"),
+            window.patentAPI.dbQuery("SELECT COUNT(*) as cnt FROM fee_tasks WHERE status = '待缴费' AND EXISTS (SELECT 1 FROM patents WHERE id = patent_id)"),
+            window.patentAPI.dbQuery("SELECT COUNT(*) as cnt FROM pending_urgent_tasks WHERE EXISTS (SELECT 1 FROM patents WHERE id = patent_id)"),
+            window.patentAPI.dbQuery("SELECT COUNT(*) as cnt FROM fee_tasks WHERE status = '待缴费' AND strftime('%Y-%m', due_date) = strftime('%Y-%m', 'now', 'localtime') AND EXISTS (SELECT 1 FROM patents WHERE id = patent_id)")
+        ]);
+        document.getElementById('statPatentCount').textContent = patentCnt[0].cnt;
+        document.getElementById('statOverdue').textContent = overdueCnt[0].cnt;
+        document.getElementById('statPending').textContent = feePending[0].cnt + otherPending[0].cnt;
+        document.getElementById('statMonthly').textContent = monthlyCnt[0].cnt;
+    } catch (err) {
+        console.error('统计卡片加载失败:', err.message);
     }
 }
 

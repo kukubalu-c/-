@@ -305,6 +305,35 @@ body {
 .year-switch button:hover:not(.active) {
     background: #e6f7ff;
 }
+
+.stat-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+.stat-card {
+    flex: 1;
+    background: #fff;
+    border-radius: 10px;
+    padding: 20px 24px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    text-align: center;
+}
+.stat-value {
+    font-size: 32px;
+    font-weight: 700;
+    color: #1a1a1a;
+    line-height: 1.2;
+}
+.stat-value.stat-overdue { color: #f5222d; }
+.stat-value.stat-pending { color: #fa8c16; }
+.stat-value.stat-monthly { color: #1890ff; }
+.stat-label {
+    font-size: 13px;
+    color: #999;
+    margin-bottom: 4px;
+}
+
 .budget-total {
     font-size: 36px;
     font-weight: 700;
@@ -331,6 +360,44 @@ body {
     background: #fafafa;
     font-weight: 600;
     color: #666;
+}
+
+.hint-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    font-size: 11px;
+    color: #bbb;
+    cursor: help;
+    border-radius: 50%;
+    vertical-align: super;
+    margin-left: 2px;
+}
+.hint-icon:hover {
+    color: #1890ff;
+}
+
+.detail-link {
+    color: #1890ff;
+    text-decoration: underline;
+    cursor: pointer;
+    font-size: 13px;
+}
+.detail-link:hover {
+    color: #40a9ff;
+}
+
+.fee-detail-table td,
+.fee-detail-table th {
+    white-space: nowrap;
+    padding: 6px 10px;
+    font-size: 13px;
+}
+.fee-detail-table tfoot td {
+    background: #fafafa;
+    border-top: 2px solid #e8e8e8;
 }
 
 /* ============================================ */

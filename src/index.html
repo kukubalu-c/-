@@ -79,9 +79,17 @@
                         <h2>仪表盘</h2>
                         <p>专利组合概览和财务预测</p>
                     </div>
+                    <!-- 统计概览卡片 -->
+                    <div class="stat-row" id="statRow">
+                        <div class="stat-card"><div class="stat-label">专利总数</div><div class="stat-value" id="statPatentCount">-</div></div>
+                        <div class="stat-card"><div class="stat-label">已逾期任务</div><div class="stat-value stat-overdue" id="statOverdue">-</div></div>
+                        <div class="stat-card"><div class="stat-label">待办任务</div><div class="stat-value stat-pending" id="statPending">-</div></div>
+                        <div class="stat-card"><div class="stat-label">本月应缴</div><div class="stat-value stat-monthly" id="statMonthly">-</div></div>
+                    </div>
+
                     <div class="dashboard-card">
-                        <h3>查询预算</h3>
                         <div style="display:flex;gap:12px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">
+                            <h3 style="margin:0;">查询预算</h3>
                             <label style="font-size:13px;color:#666;">起始月份</label>
                             <input type="month" id="budgetMonthStart" class="form-input" style="width:160px;">
                             <label style="font-size:13px;color:#666;">截止月份</label>
@@ -92,7 +100,7 @@
                     </div>
                     <div class="dashboard-row">
                         <div class="dashboard-card">
-                            <h3>资产构成</h3>
+                            <h3>资产构成 <span class="hint-icon" title="包含所有状态的专利数据">ⓘ</span></h3>
                             <div id="pieChart" style="height:360px;"></div>
                         </div>
                         <div class="dashboard-card">
@@ -107,6 +115,17 @@
                             <div id="barChart" style="height:360px;"></div>
                             <div id="barLegend" class="bar-legend"></div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- 费用明细弹窗 -->
+                <div class="modal-overlay hidden" id="feeDetailModal">
+                    <div class="modal" style="width:860px;">
+                        <div class="detail-header">
+                            <h3 id="feeDetailTitle">费用明细</h3>
+                            <button class="detail-close" id="feeDetailClose">&times;</button>
+                        </div>
+                        <div id="feeDetailBody" style="max-height:500px;overflow-y:auto;"></div>
                     </div>
                 </div>
 
