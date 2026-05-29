@@ -20,6 +20,8 @@
             <button id="loginBtn" class="btn-primary">解锁</button>
             <!-- 作用：错误提示 -->
             <p id="loginError" class="error-msg hidden">密码错误，请重试</p>
+            <!-- 作用：忘记密码链接 -->
+            <p id="forgotPwdLink" class="forgot-pwd-link hidden"><a href="javascript:void(0)" id="forgotPwdBtn">忘记密码？</a></p>
         </div>
     </div>
 
@@ -27,11 +29,44 @@
     <div id="setupPage" class="page hidden">
         <div class="login-container">
             <h1>🔒 首次使用</h1>
-            <p class="login-subtitle">请设置应用密码</p>
+            <p class="login-subtitle">请设置应用密码和密保信息</p>
             <input type="password" id="setupPasswordInput" placeholder="请输入密码">
             <input type="password" id="setupConfirmInput" placeholder="请确认密码">
+            <hr class="divider">
+            <p class="field-label">密保问题（用于忘记密码时找回）</p>
+            <select id="securityQuestionSelect" class="form-input" style="width:100%;margin-bottom:8px;">
+                <option value="">请选择密保问题</option>
+                <option value="您的大学名称是什么？">您的大学名称是什么？</option>
+                <option value="您的家乡是哪里？">您的家乡是哪里？</option>
+                <option value="您母亲的姓名是什么？">您母亲的姓名是什么？</option>
+                <option value="您父亲的姓名是什么？">您父亲的姓名是什么？</option>
+                <option value="您最喜欢的颜色是什么？">您最喜欢的颜色是什么？</option>
+                <option value="__custom__">自定义问题...</option>
+            </select>
+            <input type="text" id="securityQuestionCustom" class="form-input hidden" placeholder="请输入您的自定义问题" style="width:100%;margin-bottom:8px;">
+            <input type="text" id="securityAnswerInput" class="form-input" placeholder="请输入密保答案" style="width:100%;margin-bottom:8px;">
             <button id="setupBtn" class="btn-primary">确认设置</button>
-            <p id="setupError" class="error-msg hidden">密码不匹配或为空</p>
+            <p id="setupError" class="error-msg hidden"></p>
+        </div>
+    </div>
+
+    <!-- 作用：忘记密码重置页面 -->
+    <div id="resetPage" class="page hidden">
+        <div class="login-container">
+            <h1>🔒 重置密码</h1>
+            <p class="login-subtitle" id="resetQuestionText">请回答以下密保问题</p>
+            <p id="resetQuestion" class="reset-question"></p>
+            <input type="text" id="resetAnswerInput" placeholder="请输入密保答案">
+            <button id="resetVerifyBtn" class="btn-primary">验证答案</button>
+            <p id="resetError" class="error-msg hidden"></p>
+            <!-- 作用：新密码设置（验证通过后显示） -->
+            <div id="resetNewPwdSection" class="hidden">
+                <hr class="divider">
+                <input type="password" id="resetNewPasswordInput" placeholder="请输入新密码">
+                <input type="password" id="resetNewConfirmInput" placeholder="请确认新密码">
+                <button id="resetSaveBtn" class="btn-primary">保存新密码</button>
+            </div>
+            <p class="forgot-pwd-link" style="margin-top:12px;"><a href="javascript:void(0)" id="resetBackBtn">返回登录</a></p>
         </div>
     </div>
 
@@ -68,6 +103,15 @@
                         <span class="nav-text">数据中心</span>
                     </button>
                 </nav>
+                <!-- 作用：侧边栏底部设置区 -->
+                <div class="sidebar-bottom">
+                    <button class="nav-item" id="sidebarSettingsBtn">
+                        <span class="nav-icon">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                        </span>
+                        <span class="nav-text">安全设置</span>
+                    </button>
+                </div>
             </aside>
 
             <!-- 作用：右侧主内容区 -->
@@ -572,6 +616,35 @@
             </div>
             <div class="modal-actions" style="padding: 0 24px 24px;">
                 <button class="btn btn-primary" id="btnAlertOk">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 作用：安全设置弹窗 -->
+    <div class="modal-overlay hidden" id="securityModal">
+        <div class="modal" style="width:460px;">
+            <div class="modal-header">
+                <h4>安全设置</h4>
+                <button class="detail-close" id="securityModalClose">&times;</button>
+            </div>
+            <div class="modal-body" style="padding:20px 24px;">
+                <p style="font-size:13px;color:#888;margin-bottom:16px;">设置密保问题，忘记密码时可通过回答问题找回</p>
+                <select id="secModalQuestionSelect" class="form-input" style="width:100%;margin-bottom:8px;">
+                    <option value="">请选择密保问题</option>
+                    <option value="您的大学名称是什么？">您的大学名称是什么？</option>
+                    <option value="您的家乡是哪里？">您的家乡是哪里？</option>
+                    <option value="您母亲的姓名是什么？">您母亲的姓名是什么？</option>
+                    <option value="您父亲的姓名是什么？">您父亲的姓名是什么？</option>
+                    <option value="您最喜欢的颜色是什么？">您最喜欢的颜色是什么？</option>
+                    <option value="__custom__">自定义问题...</option>
+                </select>
+                <input type="text" id="secModalQuestionCustom" class="form-input hidden" placeholder="请输入您的自定义问题" style="width:100%;margin-bottom:8px;">
+                <input type="text" id="secModalAnswerInput" class="form-input" placeholder="请输入密保答案" style="width:100%;">
+                <p id="secModalStatus" class="error-msg hidden" style="margin-top:8px;"></p>
+            </div>
+            <div class="modal-actions" style="padding: 0 24px 20px;">
+                <button class="btn" id="secModalCancel">取消</button>
+                <button class="btn btn-primary" id="secModalSave">保存设置</button>
             </div>
         </div>
     </div>

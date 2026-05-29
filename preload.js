@@ -106,6 +106,10 @@ contextBridge.exposeInMainWorld('patentAPI', {
      */
     checkPasswordSet: () => ipcRenderer.invoke('auth:isSet'),
 
+    getSecurityQuestion: () => ipcRenderer.invoke('auth:getSecurityQuestion'),
+
+    verifySecurityAnswer: (answer) => ipcRenderer.invoke('auth:verifySecurity', answer),
+
     // ========== 备份 ==========
 
     /**

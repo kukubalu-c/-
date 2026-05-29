@@ -68,6 +68,14 @@
             const result = await apiGet('/auth/isset');
             return result.isSet;
         },
+        getSecurityQuestion: async () => {
+            const result = await apiGet('/auth/security-question');
+            return result.question;
+        },
+        verifySecurityAnswer: async (answer) => {
+            const result = await apiPost('/auth/verify-security', { answer });
+            return result.success;
+        },
 
         // === 备份 ===
         backupDatabase: async () => {

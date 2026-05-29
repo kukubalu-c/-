@@ -93,6 +93,47 @@ body {
     margin-top: 12px;
 }
 
+/* 作用：忘记密码链接 */
+.forgot-pwd-link {
+    text-align: center;
+    margin-top: 8px;
+}
+.forgot-pwd-link a {
+    color: #1890ff;
+    font-size: 13px;
+    text-decoration: none;
+}
+.forgot-pwd-link a:hover {
+    text-decoration: underline;
+}
+
+/* 作用：设置页分隔线 */
+.divider {
+    border: none;
+    border-top: 1px solid #e8e8e8;
+    margin: 16px 0;
+}
+
+/* 作用：表单字段标签 */
+.field-label {
+    font-size: 13px;
+    color: #666;
+    text-align: left;
+    margin-bottom: 6px;
+}
+
+/* 作用：重置页密保问题展示 */
+.reset-question {
+    font-size: 15px;
+    font-weight: 500;
+    color: #1a1a1a;
+    background: #f6f8fa;
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    text-align: center;
+}
+
 /* ============================================ */
 /* 应用主布局（左侧边栏 + 右侧内容） */
 /* 使用场景：用户登录后显示 */
@@ -170,6 +211,15 @@ body {
 .nav-item.active {
     color: #fff;
     background: rgba(24, 144, 255, 0.85);
+}
+
+/* 作用：侧边栏底部设置区 */
+.sidebar-bottom {
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 8px 0;
+}
+.sidebar-bottom .nav-item {
+    font-size: 13px;
 }
 
 /* 作用：导航项图标 */

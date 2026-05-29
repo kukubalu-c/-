@@ -180,6 +180,19 @@ async function handleApiRequest(req, res) {
             const settings = db.query("SELECT value FROM settings WHERE key = 'app_password'");
             result = { isSet: settings.length > 0 };
         }
+        // === 获取密保问题 ===
+        else if (pathname === '/api/auth/security-question' && method === 'GET') {
+            const settings = db.query("SELECT value FROM settings WHERE key = 'security_question'");
+            result = { question: settings.length > 0 ? settings[0].value : null };
+        }
+        // === 验证密保答案 ===
+        else if (pathname === '/api/auth/verify-security' && method === 'POST') {
+            const body = await parseBody(req);
+            const crypto = require('crypto');
+            const storedHash = db.query("SELECT value FROM settings WHERE key = 'security_answer'");
+            const inputHash = crypto.createHash('sha256').update(body.answer.toLowerCase().trim()).digest('hex');
+            result = { success: storedHash.length > 0 && storedHash[0].value === inputHash };
+        }
         // === 上传附件 ===
         else if (pathname === '/api/upload' && method === 'POST') {
             const body = await parseBody(req);
