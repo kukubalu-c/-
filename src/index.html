@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http://localhost:3000;">
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http://localhost:3000;">
     <title>企业专利全生命周期管理系统</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
@@ -74,13 +74,39 @@
             <main class="main-content">
                 <!-- 作用：页面内容容器 -->
                 <div id="dashboardPage" class="page-content active">
-                    <div class="placeholder">
-                        <div class="placeholder-icon">
-                            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+                    <!-- 页面标题 -->
+                    <div class="wb-page-header">
+                        <h2>仪表盘</h2>
+                        <p>专利组合概览和财务预测</p>
+                    </div>
+                    <div class="dashboard-card">
+                        <h3>查询预算</h3>
+                        <div style="display:flex;gap:12px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">
+                            <label style="font-size:13px;color:#666;">起始月份</label>
+                            <input type="month" id="budgetMonthStart" class="form-input" style="width:160px;">
+                            <label style="font-size:13px;color:#666;">截止月份</label>
+                            <input type="month" id="budgetMonthEnd" class="form-input" style="width:160px;">
+                            <button class="btn btn-primary" id="btnQueryBudget">查询</button>
                         </div>
-                        <h3>仪表盘</h3>
-                        <p>专利数据可视化分析看板</p>
-                        <span class="placeholder-badge">待开发</span>
+                        <div id="budgetResult" style="min-height:200px;"></div>
+                    </div>
+                    <div class="dashboard-row">
+                        <div class="dashboard-card">
+                            <h3>资产构成</h3>
+                            <div id="pieChart" style="height:360px;"></div>
+                        </div>
+                        <div class="dashboard-card">
+                            <div class="dash-header">
+                                <h3>动态存量</h3>
+                                <div class="year-switch" id="yearSwitch">
+                                    <button class="active" data-years="1">近1年</button>
+                                    <button data-years="2">近2年</button>
+                                    <button data-years="3">近3年</button>
+                                </div>
+                            </div>
+                            <div id="barChart" style="height:360px;"></div>
+                            <div id="barLegend" class="bar-legend"></div>
+                        </div>
                     </div>
                 </div>
 
@@ -289,6 +315,11 @@
                 </div>
 
                 <div id="datahubPage" class="page-content">
+                    <!-- 页面标题 -->
+                    <div class="wb-page-header">
+                        <h2>数据中心</h2>
+                        <p>数据管理及风险管控</p>
+                    </div>
                     <!-- 作用：数据中心子标签导航 -->
                     <div class="sub-tabs">
                         <button class="sub-tab active" data-subpage="import">Excel导入</button>
@@ -524,10 +555,12 @@
         </div>
     </div>
 
-    <script src="/node_modules/xlsx/dist/xlsx.full.min.js"></script>
     <script src="js/api.js"></script>
     <script src="js/login.js"></script>
     <script src="js/workbench.js"></script>
     <script src="js/datahub.js"></script>
+    <script src="/node_modules/xlsx/dist/xlsx.full.min.js"></script>
+    <script src="/node_modules/echarts/dist/echarts.min.js"></script>
+    <script src="js/dashboard.js"></script>
 </body>
 </html>

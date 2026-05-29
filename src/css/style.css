@@ -253,6 +253,87 @@ body {
 }
 
 /* ============================================ */
+/* 仪表盘卡片 */
+/* ============================================ */
+.dashboard-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+.dashboard-card {
+    flex: 1;
+    background: #fff;
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.08);
+    padding: 20px 24px;
+}
+.dashboard-card h3 {
+    margin: 0 0 12px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+}
+.dash-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+.dash-header h3 {
+    margin: 0;
+}
+.year-switch {
+    display: inline-flex;
+    border: 1px solid #d9d9d9;
+    border-radius: 4px;
+    overflow: hidden;
+}
+.year-switch button {
+    border: none;
+    background: #fff;
+    padding: 4px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    color: #666;
+    border-right: 1px solid #d9d9d9;
+}
+.year-switch button:last-child { border-right: none; }
+.year-switch button.active {
+    background: #1890ff;
+    color: #fff;
+}
+.year-switch button:hover:not(.active) {
+    background: #e6f7ff;
+}
+.budget-total {
+    font-size: 36px;
+    font-weight: 700;
+    color: #f5222d;
+    margin: 8px 0 4px 0;
+}
+.budget-label {
+    font-size: 13px;
+    color: #999;
+    margin-bottom: 16px;
+}
+.budget-breakdown {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.budget-breakdown th,
+.budget-breakdown td {
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid #f0f0f0;
+}
+.budget-breakdown th {
+    background: #fafafa;
+    font-weight: 600;
+    color: #666;
+}
+
+/* ============================================ */
 /* 通用工具类 */
 /* ============================================ */
 .text-center { text-align: center; }
@@ -563,6 +644,48 @@ body {
     font-size: 13px;
     color: #aaa;
     margin: 0;
+}
+
+/* ============================================ */
+/* 仪表盘图例 */
+/* ============================================ */
+.bar-legend {
+    text-align: center;
+    padding: 8px 0 4px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px 20px;
+}
+.bar-legend .legend-column {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+}
+.bar-legend .legend-item {
+    cursor: pointer;
+    font-size: 12px;
+    color: #666;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 4px;
+    border-radius: 3px;
+    user-select: none;
+}
+.bar-legend .legend-item:hover {
+    background: #f5f5f5;
+}
+.bar-legend .legend-item.dimmed {
+    opacity: 0.4;
+}
+.bar-legend .legend-icon {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    flex-shrink: 0;
 }
 
 /* ============================================ */

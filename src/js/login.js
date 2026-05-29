@@ -153,6 +153,16 @@ function initNavigation() {
                 if (typeof currentPage !== 'undefined') currentPage = 1;
                 loadPatentList();
             }
+            // 3.4 切换到仪表盘时初始化图表（懒加载）
+            if (pageName === 'dashboard' && typeof initDashboard === 'function') {
+                initDashboard();
+            }
         });
     });
+
+    // 如果仪表盘是当前激活页，立即初始化
+    const activeNav = document.querySelector('.nav-item.active');
+    if (activeNav && activeNav.dataset.page === 'dashboard' && typeof initDashboard === 'function') {
+        initDashboard();
+    }
 }
