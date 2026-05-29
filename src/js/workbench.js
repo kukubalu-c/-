@@ -776,7 +776,7 @@ async function computeWarningMap(patents) {
         const feeList = feeByPatent[pid] || [];
         const uploadedTypes = attByPatent[pid] || new Set();
         const statusTrans = (transByStatus[p.status] || []).filter(t => {
-            if (t.current_status === '形式审查中' && t.next_status === '实质审查中' && p.patent_type !== '发明') return false;
+            if (t.current_status === '形式审查中' && t.next_status === '待实质审查' && p.patent_type !== '发明') return false;
             if (t.current_status === '形式审查中' && t.next_status === '通知授权' && p.patent_type === '发明') return false;
             return true;
         });
@@ -797,44 +797,36 @@ async function computeWarningMap(patents) {
             }
         }
 
-        // 紧迫任务优先级：逾期缴费 > 缺附件 > 30天内缴费 > 待确认 > 其他缴费
+        // 紧迫任务展示：费用 > 手动待办 > 状态流转缺附件 > 待确认
         let urgent = null;
         let warning = { level: 'none', days: 0 };
 
-        // 逾期缴费
-        const overdueFees = feeList.filter(f => new Date(f.due_date) < today);
-        if (overdueFees.length > 0) {
-            urgent = { type: 'fee', ...overdueFees[0] };
-            warning = { level: 'overdue', days: Math.floor((today - new Date(overdueFees[0].due_date)) / (1000 * 60 * 60 * 24)) };
-        }
-        // 缺必需附件
-        else if (pendingAtt) {
-            urgent = { type: 'attachment', text: `待上传：${pendingAtt.attachment_type}`, attachment_type: pendingAtt.attachment_type };
-            warning = { level: 'urgent', days: 0 };
-        }
-        // 30天内缴费
-        else if (feeList.length > 0) {
+        if (feeList.length > 0) {
+            // 有费用待缴 → 展示第一条
             const sorted = [...feeList].sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
             const earliest = sorted[0];
             const diffDays = Math.floor((new Date(earliest.due_date) - today) / (1000 * 60 * 60 * 24));
-            if (diffDays <= 90) {
-                urgent = { type: 'fee', ...earliest };
+            urgent = { type: 'fee', ...earliest };
+            if (diffDays < 0) {
+                warning = { level: 'overdue', days: Math.abs(diffDays) };
+            } else if (diffDays <= 90) {
                 warning = { level: 'urgent', days: diffDays };
             } else {
-                urgent = { type: 'fee', ...earliest };
                 warning = { level: 'safe', days: 0 };
             }
-        }
-        // 待确认
-        else if (pendingConfirm) {
-            urgent = { type: 'confirm', text: `待确认：${pendingConfirm.action}` };
-            warning = { level: 'none', days: 0 };
-        }
-        // 5) 手动添加的其他紧迫任务（最低优先级）
-        else if (pendingByPatent[pid] && pendingByPatent[pid].length > 0) {
+        } else if (pendingByPatent[pid] && pendingByPatent[pid].length > 0) {
+            // 无费用但有手动待办
             const pt = pendingByPatent[pid][0];
             urgent = { type: 'attachment', text: pt.task_desc };
             warning = { level: 'urgent', days: 0 };
+        } else if (pendingAtt) {
+            // 缺必需附件
+            urgent = { type: 'attachment', text: `待上传：${pendingAtt.attachment_type}`, attachment_type: pendingAtt.attachment_type };
+            warning = { level: 'urgent', days: 0 };
+        } else if (pendingConfirm) {
+            // 待确认
+            urgent = { type: 'confirm', text: `待确认：${pendingConfirm.action}` };
+            warning = { level: 'none', days: 0 };
         }
 
         urgentMap[pid] = urgent || null;
@@ -902,8 +894,8 @@ function renderPatentRow(patent, urgent, warning) {
  * 作用：根据专利状态返回带颜色的标签 HTML
  */
 function renderStatusTag(status) {
-    const grayStatuses = ['撰写中', '已申请', '形式审查中'];
-    const blueStatuses = ['实质审查中', 'OA答复中', '通知授权'];
+    const grayStatuses = ['撰写中'];
+    const blueStatuses = ['已申请', '形式审查中', '待实质审查', '实质审查中', 'OA答复中', '通知授权'];
     const greenStatuses = ['专利权生效'];
     const redStatuses = ['已驳回', '已撤回', '已终止'];
 
@@ -1125,7 +1117,7 @@ async function completeTask(patentId) {
         // 过滤：形式审查中→实质审查中 仅发明适用；→通知授权 仅实用新型/外观设计适用
         const isInvention = p.patent_type === '发明';
         const filteredTrans = transitions.filter(t => {
-            if (t.current_status === '形式审查中' && t.next_status === '实质审查中' && !isInvention) return false;
+            if (t.current_status === '形式审查中' && t.next_status === '待实质审查' && !isInvention) return false;
             if (t.current_status === '形式审查中' && t.next_status === '通知授权' && isInvention) return false;
             return true;
         });
@@ -1552,7 +1544,7 @@ function daysSince(dateStr) {
  * 作用：渲染状态流（水平管道图）
  */
 function renderDetailFlow(p) {
-    const FLOW = ['撰写中', '已申请', '形式审查中', '实质审查中', 'OA答复中', '通知授权', '专利权生效', '已终止'];
+    const FLOW = ['撰写中', '已申请', '形式审查中', '待实质审查', '实质审查中', 'OA答复中', '通知授权', '专利权生效', '已终止'];
     const currentIdx = FLOW.indexOf(p.status);
     const isTerminal = ['已驳回', '已撤回', '已终止'].includes(p.status);
     const currentFlowIdx = isTerminal ? FLOW.length - 1 : currentIdx;
@@ -1775,7 +1767,7 @@ function enterEditMode() {
             { label: '申请人', key: 'applicant', type: 'text' },
             { label: '申请日期', key: 'apply_date', type: 'date' },
             { label: '授权公告日', key: 'authorize_date', type: 'date' },
-            { label: '权利状态', key: 'status', type: 'select', options: ['撰写中', '已申请', '形式审查中', '实质审查中', 'OA答复中', '通知授权', '专利权生效', '已驳回', '已撤回', '已终止'] },
+            { label: '权利状态', key: 'status', type: 'select', options: ['撰写中', '已申请', '形式审查中', '待实质审查', '实质审查中', 'OA答复中', '通知授权', '专利权生效', '已驳回', '已撤回', '已终止'] },
             { label: '费减比例', key: 'fee_reduction', type: 'select', options: ['无', '个人', '小微企业', '普通企业', '事业高校'] },
             { label: '备注', key: 'notes', type: 'text', full: true },
         ];
@@ -1829,27 +1821,34 @@ function enterEditMode() {
             editGrid.insertAdjacentHTML('beforeend', urgentHtml);
         });
 
-        // 非费用紧迫任务（手动添加）
+        // 非费用紧迫任务（手动添加），按流程先后顺序排列
+        const orderedTasks = [
+            { value: '提交申请/上传请求书', label: '提交申请/上传请求书' },
+            { value: '专利申请受理通知书', label: '待上传：专利申请受理通知书' },
+            { value: '初审合格（系统过N天或手动触发）', label: '初审合格（系统过N天或手动触发）' },
+            { value: '进入实质审查阶段通知书', label: '待上传：进入实质审查阶段通知书' },
+            { value: '审查意见通知书', label: '待上传：审查意见通知书' },
+            { value: '意见陈述书及权利要求书', label: '待上传：意见陈述书及权利要求书' },
+            { value: '授予发明专利权通知书', label: '待上传：授予发明专利权通知书' },
+            { value: '驳回决定', label: '待上传：驳回决定' },
+            { value: '撤回声明', label: '待上传：撤回声明' }
+        ];
+        let otherHtml = '<div class="pd-edit-field" style="margin-top:12px;"><label style="min-width:70px;">待办事项</label>';
+        otherHtml += '<select id="selPendingTask" data-key="urgent_pending_task" style="min-width:300px;flex:1;"><option value="">- 选择 -</option>';
+        orderedTasks.forEach(t => {
+            otherHtml += `<option value="${escapeHtml(t.value)}">${escapeHtml(t.label)}</option>`;
+        });
+        otherHtml += '</select></div>';
+        editGrid.insertAdjacentHTML('beforeend', otherHtml);
+        // 预选已保存的值
         window.patentAPI.dbQuery(
-            "SELECT DISTINCT attachment_type FROM status_transitions WHERE attachment_type != '' ORDER BY attachment_type"
-        ).then(types => {
-            let otherHtml = '<div class="pd-edit-field" style="margin-top:12px;"><label style="min-width:70px;">待办事项</label>';
-            otherHtml += '<select id="selPendingTask" data-key="urgent_pending_task" style="min-width:300px;flex:1;"><option value="">- 选择 -</option>';
-            types.forEach(t => {
-                otherHtml += `<option value="${escapeHtml(t.attachment_type)}">待上传：${escapeHtml(t.attachment_type)}</option>`;
-            });
-            otherHtml += '</select></div>';
-            editGrid.insertAdjacentHTML('beforeend', otherHtml);
-            // 预选已保存的值
-            window.patentAPI.dbQuery(
-                "SELECT task_desc FROM pending_urgent_tasks WHERE patent_id = ? ORDER BY created_at DESC LIMIT 1",
-                [currentDetailPatentId]
-            ).then(tasks => {
-                if (tasks.length > 0) {
-                    const savedType = tasks[0].task_desc.replace('待上传：', '');
-                    document.getElementById('selPendingTask').value = savedType;
-                }
-            });
+            "SELECT task_desc FROM pending_urgent_tasks WHERE patent_id = ? ORDER BY created_at DESC LIMIT 1",
+            [currentDetailPatentId]
+        ).then(tasks => {
+            if (tasks.length > 0) {
+                const savedType = tasks[0].task_desc.replace('待上传：', '');
+                document.getElementById('selPendingTask').value = savedType;
+            }
         });
 
         viewGrid.classList.add('hidden');

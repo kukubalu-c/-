@@ -94,13 +94,13 @@ const STATUS_TRANSITIONS = [
         fee_type: '',
         fee_due_rule: ''
     },
-    // 3. 形式审查中 → 实质审查中（发明）
+    // 3. 形式审查中 → 待实质审查（发明）
     {
         current_status: '形式审查中',
         action: '初审合格（系统过N天或手动触发）',
         attachment_required: 0,
         attachment_type: '',
-        next_status: '实质审查中',
+        next_status: '待实质审查',
         fee_type: '实质审查费（仅发明）',
         fee_due_rule: '申请日满2.5年起提醒，满3年未缴终止'
     },
@@ -114,9 +114,9 @@ const STATUS_TRANSITIONS = [
         fee_type: '授权登记费',
         fee_due_rule: '授权发文日+2个月'
     },
-    // 5. 实质审查中（收到进入实审通知书，状态不变）
+    // 5. 待实质审查 → 实质审查中（收到进入实审通知书）
     {
-        current_status: '实质审查中',
+        current_status: '待实质审查',
         action: '上传《发明专利申请进入实质审查阶段通知书》',
         attachment_required: 1,
         attachment_type: '进入实质审查阶段通知书',
